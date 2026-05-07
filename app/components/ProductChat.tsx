@@ -4,6 +4,7 @@ import { useState } from 'react'
 export default function ProductChat() {
   const [message, setMessage] = useState('')
   const [response, setResponse] = useState('')
+  const [promptVersion, setPromptVersion] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
@@ -18,6 +19,7 @@ export default function ProductChat() {
     })
     const data = await res.json()
     setResponse(data.response)
+    setPromptVersion(data.promptVersion)
     setLoading(false)
   }
 
@@ -36,7 +38,12 @@ export default function ProductChat() {
           {loading ? 'Asking...' : 'Ask'}
         </button>
       </form>
-      {response && <p>{response}</p>}
+      {response && (
+        <div>
+          <p>{response}</p>
+          <small>prompt v{promptVersion}</small>
+        </div>
+      )}
     </div>
   )
 }
