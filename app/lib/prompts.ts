@@ -2,7 +2,7 @@ import 'server-only'
 
 type Prompt = {
   version: number
-  system: string
+  system: string | ((context: string) => string)
 }
 
 const prompts: Record<string, Prompt[]> = {
@@ -37,18 +37,29 @@ Product details:
 
 Be enthusiastic and highlight benefits when answering. If a question is unrelated to this product, politely redirect the conversation back to the headphones.`,
     },
+    {
+      version: 3,
+      system: (context: string) => `You are an enthusiastic product specialist for our electronics store.
+
+Here are the most relevant products for this customer's question:
+
+${context}
+
+Answer based on the products above. Be helpful and highlight key benefits. If the customer asks about something not covered by these products, let them know we may have other options.`,
+    },
   ],
 }
 
 const ACTIVE_VERSIONS: Record<string, number> = {
-  'product-qa': 2,
+  'product-qa': 3,
 }
 
-export function getPrompt(name: string): Prompt {
+export function getPrompt(name: string, context = ''): { version: number; system: string } {
   const versions = prompts[name]
   if (!versions) throw new Error(`Unknown prompt: ${name}`)
   const activeVersion = ACTIVE_VERSIONS[name]
   const prompt = versions.find((p) => p.version === activeVersion)
   if (!prompt) throw new Error(`Version ${activeVersion} not found for prompt: ${name}`)
-  return prompt
+  const system = typeof prompt.system === 'function' ? prompt.system(context) : prompt.system
+  return { version: prompt.version, system }
 }

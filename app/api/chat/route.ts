@@ -1,10 +1,18 @@
 import { anthropic } from '../../lib/anthropic'
 import { getPrompt } from '../../lib/prompts'
+import { retrieveProducts } from '../../lib/rag'
 import type { NextRequest } from 'next/server'
 
 export async function POST(request: NextRequest) {
   const { message } = await request.json()
-  const prompt = getPrompt('product-qa')
+
+  const retrieved = await retrieveProducts(message)
+
+  const context = retrieved
+    .map((p) => `${p.name} ($${p.price}): ${p.description}`)
+    .join('\n\n')
+
+  const prompt = getPrompt('product-qa', context)
 
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
@@ -14,5 +22,9 @@ export async function POST(request: NextRequest) {
   })
 
   const text = msg.content[0].type === 'text' ? msg.content[0].text : ''
-  return Response.json({ response: text, promptVersion: prompt.version })
+  return Response.json({
+    response: text,
+    promptVersion: prompt.version,
+    retrievedProducts: retrieved.map((p) => p.name),
+  })
 }
