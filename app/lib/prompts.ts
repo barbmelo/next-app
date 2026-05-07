@@ -41,7 +41,7 @@ Be enthusiastic and highlight benefits when answering. If a question is unrelate
 }
 
 const ACTIVE_VERSIONS: Record<string, number> = {
-  'product-qa': 1,
+  'product-qa': 2,
 }
 
 export function getPrompt(name: string): Prompt {
