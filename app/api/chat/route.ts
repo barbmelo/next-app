@@ -1,6 +1,7 @@
 import { anthropic } from '../../lib/anthropic'
 import { getPrompt } from '../../lib/prompts'
 import { retrieveProducts } from '../../lib/rag'
+import { judgeResponse } from '../../lib/judge'
 import type { NextRequest } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -22,9 +23,13 @@ export async function POST(request: NextRequest) {
   })
 
   const text = msg.content[0].type === 'text' ? msg.content[0].text : ''
+
+  const judgment = await judgeResponse(message, context, text)
+
   return Response.json({
     response: text,
     promptVersion: prompt.version,
     retrievedProducts: retrieved.map((p) => p.name),
+    judgment,
   })
 }
