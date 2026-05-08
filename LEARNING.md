@@ -8,18 +8,19 @@ This document explains everything we built together in plain language, with anal
 
 We built an AI-powered product assistant for an electronics store. A customer can type a question like *"I need something for long flights"* and get a smart, accurate answer — even though we never explicitly programmed what to say about flights.
 
-By the end, the full pipeline looks like this:
+The full pipeline now looks like this:
 
 ```
 Customer question
-  → Find the most relevant products (RAG)
-  → Ask Claude to answer using those products (prompt)
-  → Stream the answer word by word to the screen (streaming)
+  → Agent decides which tools to call
+  → Tools run (search products, check stock, get shipping, etc.)
+  → Claude answers using tool results
+  → Stream the answer word by word to the screen
   → Grade the answer automatically (LLM-as-judge)
-  → Remember the conversation for follow-up questions (chat history)
+  → Remember the conversation for follow-up questions
 ```
 
-Each piece of that pipeline is explained below.
+Each piece is explained below.
 
 ---
 
@@ -73,15 +74,16 @@ That's `app/lib/prompts.ts`. It stores all prompt versions for each feature, and
 
 ```ts
 const ACTIVE_VERSIONS = {
-  'product-qa': 3,  // ← change this to switch versions
+  'product-qa': 4,  // ← change this to switch versions
 }
 ```
 
-- **v1**: concise and helpful
+- **v1**: concise and helpful, single hardcoded product
 - **v2**: enthusiastic, redirects off-topic questions
 - **v3**: dynamic — accepts product context injected from the RAG step
+- **v4**: agent-aware — instructs Claude to use tools instead of relying on pre-loaded context
 
-The API response always includes `promptVersion` so you know exactly which recipe was used for each answer. When something breaks, you know which version to investigate.
+The API response always includes `promptVersion` so you know exactly which recipe was used for each answer.
 
 ---
 
@@ -97,7 +99,7 @@ RAG (Retrieval-Augmented Generation) is the open-book exam approach. Instead of 
 
 **Analogy:** Imagine a map where every word or sentence has a location. Words with similar meanings are placed near each other on the map. "Headphones" and "earbuds" are close together. "Power bank" and "battery" are close together. "Keyboard" is far from "speaker."
 
-An **embedding** is just a list of hundreds of numbers that represents a sentence's position on this map. When you embed "I need something for long flights," you get a point on the map. When you embed each of your products, you get more points.
+An **embedding** is just a list of hundreds of numbers that represents a sentence's position on this map.
 
 **Finding the best match** = finding which product points are closest to the question point. This is called **cosine similarity** — it measures the angle between two points. Smaller angle = more similar meaning.
 
@@ -107,15 +109,7 @@ Lumina Headphones        →  [0.3, -0.4, 0.7, ...]  (very close → high simila
 TypeFlow Keyboard        →  [-0.6, 0.2, -0.1, ...]  (far away → low similarity)
 ```
 
-### The RAG pipeline step by step:
-
-1. **Embed the catalog** (done once, cached in memory): convert all 6 products into number vectors using OpenAI's `text-embedding-3-small`
-2. **Embed the question**: convert the user's question into a number vector
-3. **Compare**: find the 2 products with the highest similarity score
-4. **Inject**: paste those 2 product descriptions into the system prompt
-5. **Answer**: Claude answers using only the retrieved products as context
-
-This is why Claude correctly recommends headphones and a power bank for "long flights" — even though the word "flight" never appears in any product description. The *meaning* is similar.
+In our current architecture, RAG still exists but is now wrapped inside a **tool** called `search_products`. Claude decides when to call it rather than it always running automatically.
 
 ---
 
@@ -126,63 +120,105 @@ This is why Claude correctly recommends headphones and a power bank for "long fl
 LLM-as-judge is the same idea: after Claude answers, a *second* Claude call evaluates the answer.
 
 ```
-First call:  Claude answers the customer's question
+First call:  Claude answers the customer's question (using tools)
 Second call: Claude (as judge) scores the answer 1–5 and explains why
 ```
 
 The judge checks:
-- **Accuracy** — did it only mention features that are actually in the product catalog?
 - **Helpfulness** — did it actually answer what was asked?
-- **Grounding** — did it avoid making up details not in the retrieved context?
+- **Accuracy** — is the answer consistent and grounded?
+- **Clarity** — is it clear and appropriately concise?
 
-A score of 4+ = pass. This is valuable when you're iterating on prompts: if you change the system prompt and scores drop, you know the new version is worse.
+A score of 4+ = pass. When the agent uses tools, the judge is told which tools were called so it doesn't mistakenly penalize Claude for "making things up" — it trusts that the tool results were accurate.
 
 ---
 
-## 7. Streaming — Cooking in Front of You
+## 7. Tool Calling — Giving the Consultant a Toolbox
+
+**Analogy:** Your consultant is smart, but they don't know everything from memory. So you give them a set of tools they can use during the meeting: a product catalog search, an order tracking system, a stock checker, a shipping calculator, and an escalation button. They decide on their own which tools to use and in what order to fully answer the customer's question.
+
+That's tool calling. You define the tools and Claude decides when and how to use them.
+
+We built 5 tools in `app/lib/tools.ts`:
+
+| Tool | What it does |
+|---|---|
+| `search_products` | Searches the product catalog using RAG |
+| `check_order_status` | Looks up an order by ID (e.g. ORD-1001) |
+| `check_product_availability` | Checks if a product is in stock |
+| `get_shipping_estimate` | Returns shipping options and costs to a zip code |
+| `escalate_to_support` | Creates a support ticket for unresolvable issues |
+
+Each tool has a **schema** — a description of what it does and what inputs it needs. Claude reads these schemas and decides on its own which tools to call.
+
+---
+
+## 8. The Agentic Loop — The Consultant Who Keeps Researching Until Done
+
+**Analogy:** A good consultant doesn't just answer immediately. They might say "let me check the stock first" → check it → "now let me get the shipping rate" → check that too → then give you a complete answer. They loop through research steps until they have everything they need.
+
+That's the agentic loop in `app/lib/agent.ts`. It runs like this:
+
+```
+1. Send question to Claude (with tool definitions)
+2. Claude says: "I need to call search_products"
+3. We run search_products, get the result
+4. Send result back to Claude
+5. Claude says: "Now I need check_product_availability"
+6. We run it, get the result, send it back
+7. Claude says: "Now I have enough — here's my answer"
+8. Done
+```
+
+Key safety features:
+- **MAX_ITERATIONS = 10**: if Claude keeps calling tools without finishing, we stop after 10 rounds and return a friendly error. This prevents infinite loops.
+- **Per-tool error handling**: if one tool fails, the error is passed back to Claude as a result. The loop never hangs — Claude can decide what to do with the error.
+- **Parallel tool execution**: if Claude requests multiple tools at once, they all run at the same time instead of one by one.
+
+The UI shows tools firing in real time: `calling: search_products → check_product_availability...`
+
+---
+
+## 9. Streaming — Cooking in Front of You
 
 **Analogy:** Two restaurant experiences:
 - **No streaming**: You order, wait 10 minutes in silence, then the full plate arrives.
 - **Streaming**: The chef cooks in front of you. You can see the dish being assembled in real time.
 
-Without streaming, the UI waits for Claude to finish generating the entire response, then shows it all at once. With streaming, each word arrives as Claude generates it — the text appears token by token, just like ChatGPT.
-
-Technically, the server sends **Server-Sent Events (SSE)** — a stream of small messages:
+The server sends **Server-Sent Events (SSE)** — a stream of small messages the browser reads one by one:
 
 ```
-data: {"type":"text","text":"The"}
-data: {"type":"text","text":" Lumina"}
-data: {"type":"text","text":" headphones"}
-...
-data: {"type":"metadata","judgment":{...}}
+data: {"type":"tool_call","name":"search_products"}
+data: {"type":"tool_call","name":"check_product_availability"}
+data: {"type":"text","text":"The Lumina headphones are in stock..."}
+data: {"type":"text","text":" and ship for $4.99 standard."}
+data: {"type":"metadata","judgment":{...},"toolCallsLog":[...]}
 data: [DONE]
 ```
 
-The browser reads these one by one and appends each word to the screen. The judgment arrives last, after the full response is complete (because the judge needs the complete text to evaluate it).
+Tool calls appear first (so the user sees "calling: search_products..."), then the text answer, then the judgment.
 
 ---
 
-## 8. Chat History — Short-Term Memory
+## 10. Chat History — Short-Term Memory
 
 **Analogy:** Imagine calling customer support. In version A, every time you ask a follow-up question the agent has no memory of what you just said — you have to repeat everything. In version B, the agent remembers the whole conversation.
 
-Before chat history, every question was isolated. Claude had no idea what was said before. Now we pass the entire conversation to the API each time:
+We pass the entire conversation to the API each time:
 
 ```
 [
-  { role: "user",      content: "I need something for long flights" },
-  { role: "assistant", content: "I recommend the Lumina headphones!" },
-  { role: "user",      content: "how long is the battery?" }   ← new question
+  { role: "user",      content: "I need headphones for flights" },
+  { role: "assistant", content: "The Lumina headphones are great..." },
+  { role: "user",      content: "are they in stock?" }   ← new question
 ]
 ```
 
-Claude sees the full context and knows that "the battery" refers to the Lumina headphones from the earlier message. This is how all chat-based AI products work — the "memory" is just the history being re-sent every time.
+Claude sees the full context and knows "they" refers to the Lumina headphones. The "memory" is just the history being re-sent every turn.
 
 ---
 
 ## The Full Stack
-
-Here's how all the pieces fit together:
 
 ```
 Browser (React)
@@ -191,19 +227,26 @@ Browser (React)
 │  History + new message sent via fetch()
 │
 ▼
-Vercel (Next.js Route Handler)  ← server-only code, API keys safe here
+Vercel (Next.js Route Handler)  ← server-only, API keys safe here
 │
-│  1. Embed question → OpenAI API
-│  2. Find top 2 similar products (cosine similarity)
-│  3. Build system prompt with retrieved products (prompt v3)
-│  4. Send messages array to Claude → stream response
-│  5. After streaming, judge the response → Claude API (2nd call)
-│  6. Send metadata event (judgment, version, retrieved products)
+│  Agentic loop (app/lib/agent.ts):
+│  ┌─────────────────────────────────────────┐
+│  │  Send messages + tool definitions        │
+│  │  Claude responds with tool_use blocks    │
+│  │  Execute tools (in parallel if multiple) │
+│  │  Add tool results to history             │
+│  │  Repeat until stop_reason = end_turn     │
+│  │  or MAX_ITERATIONS reached               │
+│  └─────────────────────────────────────────┘
+│
+│  Stream text response back via SSE
+│  Run LLM-as-judge on completed response
+│  Send metadata event (judgment, tool log, prompt version)
 │
 ▼
 Browser (React)
 │
-│  Reads SSE stream token by token
+│  Shows tool calls as they fire
 │  Updates text on screen as tokens arrive
 │  Shows judgment when metadata event arrives
 │  Adds completed message to conversation history
@@ -222,14 +265,15 @@ Browser (React)
 | Prompt versioning | Numbered, switchable prompt templates | Chef's recipe book |
 | Embeddings | Sentences as points on a meaning-map | GPS coordinates for meaning |
 | RAG | Retrieve context before answering | Open-book exam |
+| Tool calling | Claude decides which functions to run | Consultant with a toolbox |
+| Agentic loop | Repeated tool → result → tool cycles | Consultant who keeps researching |
 | LLM-as-judge | Second LLM call to grade the first | Quality inspector |
-| Streaming (SSE) | Send tokens as they're generated | Chef cooking in front of you |
+| Streaming (SSE) | Send tokens and events as they happen | Chef cooking in front of you |
 | Chat history | Re-send full conversation each turn | Support agent with memory |
 
 ---
 
-## What Could Come Next
+## What's Next
 
-- **Vector database** (Pinecone, Supabase pgvector): right now embeddings are recomputed on every cold start. A real DB stores them permanently and scales to thousands of products.
-- **Logging & analytics**: store every question + judgment score in a database to spot patterns — which questions score low? which prompts win?
-- **A/B testing**: route 50% of traffic to prompt v2 and 50% to v3, compare average scores with real data.
+- **Goal #2 — Server-side persistence**: move chat history from React state to a database (Drizzle + SQLite). Each conversation gets a session ID so history survives page refreshes.
+- **Goal #3 — Structured logging/observability**: every request logs a JSON object with session ID, tokens used, tool calls, latency, and judgment score — so you can monitor the system in production.
