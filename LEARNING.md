@@ -8,16 +8,18 @@ This document explains everything we built together in plain language, with anal
 
 We built an AI-powered product assistant for an electronics store. A customer can type a question like *"I need something for long flights"* and get a smart, accurate answer — even though we never explicitly programmed what to say about flights.
 
-The full pipeline now looks like this:
+The full pipeline looks like this:
 
 ```
 Customer question
+  → Load conversation history from database
   → Agent decides which tools to call
   → Tools run (search products, check stock, get shipping, etc.)
   → Claude answers using tool results
+  → Save messages to database
   → Stream the answer word by word to the screen
   → Grade the answer automatically (LLM-as-judge)
-  → Remember the conversation for follow-up questions
+  → Emit structured log (tokens, latency, score, tool calls)
 ```
 
 Each piece is explained below.
@@ -109,7 +111,7 @@ Lumina Headphones        →  [0.3, -0.4, 0.7, ...]  (very close → high simila
 TypeFlow Keyboard        →  [-0.6, 0.2, -0.1, ...]  (far away → low similarity)
 ```
 
-In our current architecture, RAG still exists but is now wrapped inside a **tool** called `search_products`. Claude decides when to call it rather than it always running automatically.
+In our current architecture, RAG still exists but is wrapped inside a **tool** called `search_products`. Claude decides when to call it rather than it always running automatically.
 
 ---
 
@@ -129,15 +131,13 @@ The judge checks:
 - **Accuracy** — is the answer consistent and grounded?
 - **Clarity** — is it clear and appropriately concise?
 
-A score of 4+ = pass. When the agent uses tools, the judge is told which tools were called so it doesn't mistakenly penalize Claude for "making things up" — it trusts that the tool results were accurate.
+A score of 4+ = pass. When the agent uses tools, the judge is told which tools were called so it doesn't mistakenly penalize Claude for "making things up."
 
 ---
 
 ## 7. Tool Calling — Giving the Consultant a Toolbox
 
-**Analogy:** Your consultant is smart, but they don't know everything from memory. So you give them a set of tools they can use during the meeting: a product catalog search, an order tracking system, a stock checker, a shipping calculator, and an escalation button. They decide on their own which tools to use and in what order to fully answer the customer's question.
-
-That's tool calling. You define the tools and Claude decides when and how to use them.
+**Analogy:** Your consultant is smart, but they don't know everything from memory. So you give them a set of tools they can use during the meeting: a product catalog search, an order tracking system, a stock checker, a shipping calculator, and an escalation button. They decide on their own which tools to use and in what order.
 
 We built 5 tools in `app/lib/tools.ts`:
 
@@ -171,11 +171,9 @@ That's the agentic loop in `app/lib/agent.ts`. It runs like this:
 ```
 
 Key safety features:
-- **MAX_ITERATIONS = 10**: if Claude keeps calling tools without finishing, we stop after 10 rounds and return a friendly error. This prevents infinite loops.
-- **Per-tool error handling**: if one tool fails, the error is passed back to Claude as a result. The loop never hangs — Claude can decide what to do with the error.
-- **Parallel tool execution**: if Claude requests multiple tools at once, they all run at the same time instead of one by one.
-
-The UI shows tools firing in real time: `calling: search_products → check_product_availability...`
+- **MAX_ITERATIONS = 10**: if Claude keeps calling tools without finishing, we stop after 10 rounds. This prevents infinite loops.
+- **Per-tool error handling**: if one tool fails, the error is passed back to Claude. The loop never hangs.
+- **Parallel tool execution**: if Claude requests multiple tools at once, they all run at the same time.
 
 ---
 
@@ -202,19 +200,83 @@ Tool calls appear first (so the user sees "calling: search_products..."), then t
 
 ## 10. Chat History — Short-Term Memory
 
-**Analogy:** Imagine calling customer support. In version A, every time you ask a follow-up question the agent has no memory of what you just said — you have to repeat everything. In version B, the agent remembers the whole conversation.
+**Analogy:** Imagine calling customer support. In version A, every time you ask a follow-up question the agent has no memory of what you just said. In version B, the agent remembers the whole conversation.
 
-We pass the entire conversation to the API each time:
+The entire conversation is stored in the database and loaded on every request. The client only sends the new message and the session ID — the server fetches the rest:
 
 ```
-[
-  { role: "user",      content: "I need headphones for flights" },
-  { role: "assistant", content: "The Lumina headphones are great..." },
-  { role: "user",      content: "are they in stock?" }   ← new question
-]
+Client sends:  { message: "is it in stock?", session_id: "abc-123" }
+Server loads:  all previous messages from Neon
+Server sends:  full history + new message to Claude
 ```
 
-Claude sees the full context and knows "they" refers to the Lumina headphones. The "memory" is just the history being re-sent every turn.
+Claude sees the full context and knows "it" refers to the product mentioned earlier. The "memory" is history loaded from the database, not re-sent by the browser.
+
+---
+
+## 11. Server-side Persistence — The Hotel Guest Registry
+
+**Analogy:** Imagine a hotel. When you check in, you're given a room key with a unique ID. Every time you come back — even after leaving and returning — the front desk looks up your ID in the registry and knows exactly who you are and what you need. If you lose your key and get a new one, your history is gone. But as long as you keep your key, the front desk remembers everything.
+
+That's our session system. Each conversation gets a **UUID** (a unique ID like `a2899e6f-9db8-4219-936d-b79d29650dac`). The database stores every message:
+
+```
+sessions table:
+  id (UUID)  |  created_at
+
+messages table:
+  id  |  session_id  |  role  |  content  |  created_at
+```
+
+We use **Drizzle ORM** to talk to the database. Drizzle lets you write database queries in TypeScript instead of raw SQL:
+
+```ts
+// Instead of: SELECT * FROM messages WHERE session_id = ?
+const rows = await db.select().from(messages).where(eq(messages.sessionId, sessionId))
+```
+
+The database runs on **Neon** — a serverless PostgreSQL service with a free tier. "Serverless" here means you don't manage a server; Neon scales automatically and only charges for what you use (which for this project is essentially free).
+
+**Why move history to the server?**
+- Before: if you refreshed the page, conversation was gone (it only lived in React state)
+- After: history survives page refreshes, device switches, and server restarts
+- Bonus: the client payload is much smaller — no need to send the entire history on every request
+
+---
+
+## 12. Structured Logging / Observability — The Flight Recorder
+
+**Analogy:** Every commercial aircraft has a black box — a flight recorder that captures everything: speed, altitude, engine status, pilot inputs. If something goes wrong, investigators can open the black box and understand exactly what happened, when, and why.
+
+Our structured log is the black box for every AI request. After each conversation turn, we emit one JSON line:
+
+```json
+{
+  "session_id": "c13aec62-17f6-481a-9afc-c11c39d40fb4",
+  "tokens_used": { "input": 4927, "output": 533 },
+  "tool_calls": ["search_products", "check_product_availability", "get_shipping_estimate"],
+  "latency_ms": 18333,
+  "judgment_score": 5,
+  "error": null
+}
+```
+
+**Why each field matters:**
+
+| Field | What it tells you |
+|---|---|
+| `session_id` | Which conversation — link to the full history in the DB |
+| `tokens_used` | How much it cost — input + output across all LLM calls |
+| `tool_calls` | What the agent did — which tools fired and in what order |
+| `latency_ms` | How long the user waited — useful for spotting slow queries |
+| `judgment_score` | Quality score — if this drops, something changed for the worse |
+| `error` | What went wrong — `null` means success |
+
+These logs appear in Vercel's function logs. From there you can pipe them to any monitoring tool (Datadog, Grafana, a simple database) to answer questions like:
+- "Which sessions have low judgment scores?"
+- "Which tool calls are slowest?"
+- "How much are we spending per session?"
+- "Did the last prompt change improve or hurt quality?"
 
 ---
 
@@ -223,33 +285,36 @@ Claude sees the full context and knows "they" refers to the Lumina headphones. T
 ```
 Browser (React)
 │
-│  User types a question
-│  History + new message sent via fetch()
+│  User types a message
+│  Sends: { message, session_id }
 │
 ▼
 Vercel (Next.js Route Handler)  ← server-only, API keys safe here
 │
-│  Agentic loop (app/lib/agent.ts):
-│  ┌─────────────────────────────────────────┐
-│  │  Send messages + tool definitions        │
-│  │  Claude responds with tool_use blocks    │
-│  │  Execute tools (in parallel if multiple) │
-│  │  Add tool results to history             │
-│  │  Repeat until stop_reason = end_turn     │
-│  │  or MAX_ITERATIONS reached               │
-│  └─────────────────────────────────────────┘
-│
-│  Stream text response back via SSE
-│  Run LLM-as-judge on completed response
-│  Send metadata event (judgment, tool log, prompt version)
+│  1. Load session history from Neon (DB)
+│  2. Save user message to Neon
+│  3. Agentic loop (app/lib/agent.ts):
+│     ┌─────────────────────────────────────────┐
+│     │  Send messages + tool definitions        │
+│     │  Collect token usage per iteration       │
+│     │  Claude responds with tool_use blocks    │
+│     │  Execute tools (in parallel if multiple) │
+│     │  Add tool results to history             │
+│     │  Repeat until end_turn or MAX_ITERATIONS │
+│     └─────────────────────────────────────────┘
+│  4. Stream text response via SSE
+│  5. Save assistant message to Neon
+│  6. Run LLM-as-judge → score + token usage
+│  7. Send metadata event (judgment, tool log, session_id)
+│  8. Emit structured log (tokens, latency, score, error)
 │
 ▼
 Browser (React)
 │
 │  Shows tool calls as they fire
 │  Updates text on screen as tokens arrive
+│  Stores session_id for next message
 │  Shows judgment when metadata event arrives
-│  Adds completed message to conversation history
 ```
 
 ---
@@ -269,11 +334,17 @@ Browser (React)
 | Agentic loop | Repeated tool → result → tool cycles | Consultant who keeps researching |
 | LLM-as-judge | Second LLM call to grade the first | Quality inspector |
 | Streaming (SSE) | Send tokens and events as they happen | Chef cooking in front of you |
-| Chat history | Re-send full conversation each turn | Support agent with memory |
+| Chat history | Conversation loaded from DB each turn | Support agent with memory |
+| Server-side persistence | Sessions + messages stored in PostgreSQL | Hotel guest registry |
+| Structured logging | JSON log per request with tokens, latency, score | Flight recorder / black box |
 
 ---
 
 ## What's Next
 
-- **Goal #2 — Server-side persistence**: move chat history from React state to a database (Drizzle + SQLite). Each conversation gets a session ID so history survives page refreshes.
-- **Goal #3 — Structured logging/observability**: every request logs a JSON object with session ID, tokens used, tool calls, latency, and judgment score — so you can monitor the system in production.
+All three original goals are complete. Some directions to explore from here:
+
+- **A/B testing prompts**: route traffic between prompt versions and compare average judgment scores with real data
+- **Analytics dashboard**: query the structured logs to visualize quality trends, token spend, and tool usage over time
+- **Vector database** (Pinecone, Supabase pgvector): move embeddings out of memory into a persistent store that scales to thousands of products
+- **Real product data**: connect the tools to a real database or API instead of mock data
