@@ -7,6 +7,8 @@ const MAX_ITERATIONS = 10
 const MODEL = 'claude-sonnet-4-6'
 const MAX_TOKENS = 1024
 
+export type TokenUsage = { input_tokens: number; output_tokens: number }
+
 export type AgentCallbacks = {
   onText: (text: string) => void
   onToolCall: (name: string) => void
@@ -15,6 +17,7 @@ export type AgentCallbacks = {
 export type AgentResult = {
   fullText: string
   toolCallsLog: string[]
+  usage: TokenUsage
 }
 
 export async function runAgent(
@@ -24,6 +27,7 @@ export async function runAgent(
 ): Promise<AgentResult> {
   const history: Anthropic.Messages.MessageParam[] = [...messages]
   const toolCallsLog: string[] = []
+  const usage: TokenUsage = { input_tokens: 0, output_tokens: 0 }
   let fullText = ''
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -41,10 +45,12 @@ export async function runAgent(
       console.error('[agent] anthropic.messages.create failed:', err)
       const errorText = 'Something went wrong while processing your request. Please try again.'
       callbacks.onText(errorText)
-      return { fullText: errorText, toolCallsLog }
+      return { fullText: errorText, toolCallsLog, usage }
     }
 
-    // Collect any text blocks from this response
+    usage.input_tokens += response.usage.input_tokens
+    usage.output_tokens += response.usage.output_tokens
+
     const textBlocks = response.content.filter(
       (b): b is Anthropic.Messages.TextBlock => b.type === 'text'
     )
@@ -55,14 +61,12 @@ export async function runAgent(
     if (response.stop_reason === 'end_turn') {
       fullText = textBlocks.map((b) => b.text).join('')
       callbacks.onText(fullText)
-      return { fullText, toolCallsLog }
+      return { fullText, toolCallsLog, usage }
     }
 
     if (response.stop_reason === 'tool_use') {
-      // Add the assistant turn (including tool_use blocks) to history
       history.push({ role: 'assistant', content: response.content })
 
-      // Execute all tools in parallel
       const toolResults = await Promise.all(
         toolUseBlocks.map(async (block) => {
           callbacks.onToolCall(block.name)
@@ -87,14 +91,12 @@ export async function runAgent(
       continue
     }
 
-    // Unexpected stop reason — return whatever text we have
     fullText = textBlocks.map((b) => b.text).join('')
     callbacks.onText(fullText)
-    return { fullText, toolCallsLog }
+    return { fullText, toolCallsLog, usage }
   }
 
-  // Max iterations reached
   const limitText = "I wasn't able to complete your request in the allowed number of steps. Please try rephrasing your question."
   callbacks.onText(limitText)
-  return { fullText: limitText, toolCallsLog }
+  return { fullText: limitText, toolCallsLog, usage }
 }

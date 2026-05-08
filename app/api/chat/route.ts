@@ -5,6 +5,8 @@ import { getOrCreateSession, saveMessage, getMessages } from '../../lib/db/queri
 import type { NextRequest } from 'next/server'
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+
   const { message, session_id }: { message: string; session_id?: string } =
     await request.json()
 
@@ -23,33 +25,54 @@ export async function POST(request: NextRequest) {
       const send = (data: object) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
 
-      const toolCallsLog: string[] = []
-      let fullText = ''
+      let error: string | null = null
 
-      const result = await runAgent(messages, system, {
-        onText: (text) => {
-          fullText += text
-          send({ type: 'text', text })
-        },
-        onToolCall: (name) => {
-          toolCallsLog.push(name)
-          send({ type: 'tool_call', name })
-        },
-      })
+      try {
+        const agentResult = await runAgent(messages, system, {
+          onText: (text) => send({ type: 'text', text }),
+          onToolCall: (name) => send({ type: 'tool_call', name }),
+        })
 
-      fullText = result.fullText
+        await saveMessage(sessionId, 'assistant', agentResult.fullText)
 
-      await saveMessage(sessionId, 'assistant', fullText)
+        const { judgment, usage: judgeUsage } = await judgeResponse(
+          message,
+          '',
+          agentResult.fullText,
+          agentResult.toolCallsLog
+        )
 
-      const judgment = await judgeResponse(message, '', fullText, toolCallsLog)
+        send({
+          type: 'metadata',
+          judgment,
+          promptVersion,
+          toolCallsLog: agentResult.toolCallsLog,
+          session_id: sessionId,
+        })
 
-      send({
-        type: 'metadata',
-        judgment,
-        promptVersion,
-        toolCallsLog,
-        session_id: sessionId,
-      })
+        console.log(JSON.stringify({
+          session_id: sessionId,
+          tokens_used: {
+            input: agentResult.usage.input_tokens + judgeUsage.input_tokens,
+            output: agentResult.usage.output_tokens + judgeUsage.output_tokens,
+          },
+          tool_calls: agentResult.toolCallsLog,
+          latency_ms: Date.now() - startTime,
+          judgment_score: judgment.score,
+          error: null,
+        }))
+      } catch (err) {
+        error = err instanceof Error ? err.message : 'unknown error'
+        console.log(JSON.stringify({
+          session_id: sessionId,
+          tokens_used: { input: 0, output: 0 },
+          tool_calls: [],
+          latency_ms: Date.now() - startTime,
+          judgment_score: null,
+          error,
+        }))
+        send({ type: 'text', text: 'Something went wrong. Please try again.' })
+      }
 
       controller.enqueue(encoder.encode('data: [DONE]\n\n'))
       controller.close()

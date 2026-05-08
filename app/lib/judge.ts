@@ -1,10 +1,16 @@
 import 'server-only'
 import { anthropic } from './anthropic'
+import type { TokenUsage } from './agent'
 
 export type Judgment = {
   score: number
   passed: boolean
   reason: string
+}
+
+export type JudgeResult = {
+  judgment: Judgment
+  usage: TokenUsage
 }
 
 const JUDGE_PROMPT = `You are evaluating a product assistant's response. You will be given:
@@ -27,7 +33,7 @@ export async function judgeResponse(
   context: string,
   response: string,
   toolCallsLog: string[] = []
-): Promise<Judgment> {
+): Promise<JudgeResult> {
   const contextSection =
     toolCallsLog.length > 0
       ? `Tools used: ${toolCallsLog.join(', ')}`
@@ -46,5 +52,11 @@ export async function judgeResponse(
   })
 
   const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-  return JSON.parse(text) as Judgment
+  return {
+    judgment: JSON.parse(text) as Judgment,
+    usage: {
+      input_tokens: msg.usage.input_tokens,
+      output_tokens: msg.usage.output_tokens,
+    },
+  }
 }
