@@ -5,20 +5,21 @@ import type { Judgment } from '../lib/judge'
 type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
+  toolCallsLog?: string[]
   judgment?: Judgment
-  retrievedProducts?: string[]
   promptVersion?: number
 }
 
 export default function ProductChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [activeToolCalls, setActiveToolCalls] = useState<string[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, activeToolCalls])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,6 +29,7 @@ export default function ProductChat() {
     const assistantMessage: ChatMessage = { role: 'assistant', content: '' }
 
     setMessages((prev) => [...prev, userMessage, assistantMessage])
+    setActiveToolCalls([])
     setInput('')
     setLoading(true)
 
@@ -58,7 +60,10 @@ export default function ProductChat() {
 
         const event = JSON.parse(raw)
 
-        if (event.type === 'text') {
+        if (event.type === 'tool_call') {
+          setActiveToolCalls((prev) => [...prev, event.name])
+        } else if (event.type === 'text') {
+          setActiveToolCalls([])
           setMessages((prev) => {
             const updated = [...prev]
             updated[updated.length - 1] = {
@@ -73,7 +78,7 @@ export default function ProductChat() {
             updated[updated.length - 1] = {
               ...updated[updated.length - 1],
               judgment: event.judgment,
-              retrievedProducts: event.retrievedProducts,
+              toolCallsLog: event.toolCallsLog,
               promptVersion: event.promptVersion,
             }
             return updated
@@ -96,13 +101,24 @@ export default function ProductChat() {
             <p>{msg.content}</p>
             {msg.role === 'assistant' && msg.judgment && (
               <small>
-                prompt v{msg.promptVersion} · retrieved: {msg.retrievedProducts?.join(', ')} ·
-                judge: {msg.judgment.passed ? '✓ pass' : '✗ fail'} · score {msg.judgment.score}/5 · {msg.judgment.reason}
+                prompt v{msg.promptVersion}
+                {msg.toolCallsLog && msg.toolCallsLog.length > 0 && (
+                  <> · tools: {msg.toolCallsLog.join(' → ')}</>
+                )}
+                {' · '}judge: {msg.judgment.passed ? '✓ pass' : '✗ fail'} · score{' '}
+                {msg.judgment.score}/5 · {msg.judgment.reason}
               </small>
             )}
           </div>
         ))}
-        {loading && messages.at(-1)?.content === '' && <p>...</p>}
+
+        {activeToolCalls.length > 0 && (
+          <p><small>calling: {activeToolCalls.join(' → ')}...</small></p>
+        )}
+        {loading && messages.at(-1)?.content === '' && activeToolCalls.length === 0 && (
+          <p>...</p>
+        )}
+
         <div ref={bottomRef} />
       </div>
 

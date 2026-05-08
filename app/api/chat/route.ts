@@ -1,7 +1,6 @@
-import { anthropic } from '../../lib/anthropic'
 import { getPrompt } from '../../lib/prompts'
-import { retrieveProducts } from '../../lib/rag'
 import { judgeResponse } from '../../lib/judge'
+import { runAgent } from '../../lib/agent'
 import type { NextRequest } from 'next/server'
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -9,13 +8,10 @@ type Message = { role: 'user' | 'assistant'; content: string }
 export async function POST(request: NextRequest) {
   const { messages }: { messages: Message[] } = await request.json()
 
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  const lastUserMessage =
+    [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 
-  const retrieved = await retrieveProducts(lastUserMessage)
-  const context = retrieved
-    .map((p) => `${p.name} ($${p.price}): ${p.description}`)
-    .join('\n\n')
-  const prompt = getPrompt('product-qa', context)
+  const { version: promptVersion, system } = getPrompt('product-qa')
 
   const encoder = new TextEncoder()
 
@@ -24,28 +20,23 @@ export async function POST(request: NextRequest) {
       const send = (data: object) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
 
-      let fullText = ''
+      const toolCallsLog: string[] = []
 
-      const anthropicStream = anthropic.messages.stream({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: prompt.system,
-        messages,
+      const { fullText } = await runAgent(messages, system, {
+        onText: (text) => send({ type: 'text', text }),
+        onToolCall: (name) => {
+          toolCallsLog.push(name)
+          send({ type: 'tool_call', name })
+        },
       })
 
-      for await (const event of anthropicStream) {
-        if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          fullText += event.delta.text
-          send({ type: 'text', text: event.delta.text })
-        }
-      }
+      const judgment = await judgeResponse(lastUserMessage, '', fullText, toolCallsLog)
 
-      const judgment = await judgeResponse(lastUserMessage, context, fullText)
       send({
         type: 'metadata',
         judgment,
-        promptVersion: prompt.version,
-        retrievedProducts: retrieved.map((p) => p.name),
+        promptVersion,
+        toolCallsLog,
       })
 
       controller.enqueue(encoder.encode('data: [DONE]\n\n'))

@@ -9,13 +9,15 @@ export type Judgment = {
 
 const JUDGE_PROMPT = `You are evaluating a product assistant's response. You will be given:
 - The customer's question
-- The product context the assistant had access to
+- How the assistant gathered information (either tool calls or pre-loaded context)
 - The assistant's response
 
 Score the response from 1 to 5 on these criteria:
-- Accuracy: does it only mention features present in the product context?
-- Helpfulness: does it actually answer the question?
-- Grounding: does it avoid making up details not in the context?
+- Helpfulness: does it actually answer the question asked?
+- Accuracy: does the answer appear grounded and consistent (no obvious contradictions)?
+- Clarity: is the response clear and appropriately concise?
+
+If the assistant used tool calls, trust that the tool results were accurate — do not penalize for "missing context".
 
 Respond with valid JSON only, no other text:
 {"score": <1-5>, "passed": <true if score >= 4>, "reason": "<one sentence explaining the score>"}`
@@ -23,8 +25,14 @@ Respond with valid JSON only, no other text:
 export async function judgeResponse(
   question: string,
   context: string,
-  response: string
+  response: string,
+  toolCallsLog: string[] = []
 ): Promise<Judgment> {
+  const contextSection =
+    toolCallsLog.length > 0
+      ? `Tools used: ${toolCallsLog.join(', ')}`
+      : `Product context:\n${context}`
+
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 256,
@@ -32,7 +40,7 @@ export async function judgeResponse(
     messages: [
       {
         role: 'user',
-        content: `Question: ${question}\n\nProduct context:\n${context}\n\nAssistant response:\n${response}`,
+        content: `Question: ${question}\n\n${contextSection}\n\nAssistant response:\n${response}`,
       },
     ],
   })
