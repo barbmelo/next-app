@@ -38,6 +38,7 @@ export async function runAgent(
         messages: history,
       })
     } catch (err) {
+      console.error('[agent] anthropic.messages.create failed:', err)
       const errorText = 'Something went wrong while processing your request. Please try again.'
       callbacks.onText(errorText)
       return { fullText: errorText, toolCallsLog }
