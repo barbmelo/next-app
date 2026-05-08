@@ -12,6 +12,7 @@ type ChatMessage = {
 
 export default function ProductChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [sessionId, setSessionId] = useState<string | null>(null)
   const [activeToolCalls, setActiveToolCalls] = useState<string[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,12 +34,10 @@ export default function ProductChat() {
     setInput('')
     setLoading(true)
 
-    const apiMessages = [...messages, userMessage].map(({ role, content }) => ({ role, content }))
-
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: apiMessages }),
+      body: JSON.stringify({ message: input, session_id: sessionId }),
     })
 
     const reader = res.body!.getReader()
@@ -73,6 +72,7 @@ export default function ProductChat() {
             return updated
           })
         } else if (event.type === 'metadata') {
+          if (!sessionId) setSessionId(event.session_id)
           setMessages((prev) => {
             const updated = [...prev]
             updated[updated.length - 1] = {
@@ -93,6 +93,7 @@ export default function ProductChat() {
   return (
     <div>
       <h2>Ask about our products</h2>
+      {sessionId && <small>session: {sessionId}</small>}
 
       <div>
         {messages.map((msg, i) => (
