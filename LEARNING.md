@@ -280,6 +280,182 @@ These logs appear in Vercel's function logs. From there you can pipe them to any
 
 ---
 
+## 13. Unit & Integration Tests — The Safety Net
+
+**Analogy:** Imagine a trapeze artist. They can fly through the air with confidence *because there's a net below*. The net doesn't make them perform — it just means a mistake doesn't end the show. Tests are that net: they don't write your features, but they catch regressions before they reach users.
+
+We use **Vitest** — a fast test runner designed for modern TypeScript projects.
+
+### Three test files
+
+| File | Type | What it tests |
+|---|---|---|
+| `tools.test.ts` | Unit | All 5 tool functions with controlled inputs |
+| `prompts.test.ts` | Unit | Prompt versioning, active version, context injection |
+| `agent.test.ts` | Integration | The full agentic loop — tool calls, errors, iteration limit |
+
+### Unit tests — Testing one thing at a time
+
+**Analogy:** A car mechanic doesn't test-drive the car to check if the windshield wipers work. They hook up the switch directly and watch the wipers move. Unit tests do the same — test one function in isolation, with fake inputs.
+
+For `checkOrderStatus`, we pass a known order ID and assert on the exact response:
+```ts
+const result = await executeTool('check_order_status', { order_id: 'ORD-1001' })
+expect(JSON.parse(result).status).toBe('shipped')
+```
+
+No database. No API. Just the function and its logic.
+
+### Integration tests — Testing how pieces work together
+
+**Analogy:** After testing each part separately, you put them all in the car and take it for a short test drive. Integration tests check that the parts *talk to each other correctly*.
+
+The agent integration tests verify the full loop: LLM call → tool use → result back to LLM → final answer. We mock the Anthropic API to return scripted responses, then confirm the agent behaves correctly end-to-end:
+
+```
+Mock: Claude says "call check_order_status"
+→ Agent runs the tool
+→ Agent sends result back to Claude
+Mock: Claude says "Your order is shipped"
+→ Assert: fullText = "Your order is shipped", toolCallsLog = ["check_order_status"]
+```
+
+### Mocking — Replacing the real with a controlled fake
+
+**Analogy:** Flight simulators. Pilots train in a fake cockpit that behaves exactly like the real one — without the risk of crashing a real plane. Mocks are the same: they simulate the real dependency (OpenAI, Anthropic, the database) so tests are fast, free, and predictable.
+
+We mock three things:
+- `server-only` → replaced with an empty file (it only guards against browser imports)
+- `../lib/rag` → `retrieveProducts` returns a hardcoded product list
+- `../lib/anthropic` → `getAnthropic().messages.create` returns scripted responses
+
+### Why SDK clients must be lazy
+
+One subtle bug we fixed: both `new OpenAI()` and `new Anthropic()` were created at the *top level of their modules*. This means they run the moment the file is imported — including at build time, when Next.js analyzes every route. With no API keys available during the build, the constructors threw immediately.
+
+The fix: create the client *inside* the function, only when a real request arrives:
+
+```ts
+// Before — runs at import time, throws during build
+const openai = new OpenAI()
+
+// After — runs only when called at runtime
+async function retrieveProducts(query: string) {
+  const openai = new OpenAI()  // ← safe now
+  ...
+}
+```
+
+---
+
+## 14. Live Product Data — Replacing the Dummy Catalog
+
+**Analogy:** Imagine training a new employee using a fake product brochure. They learn the process perfectly — but when a real customer asks about a real product, they're lost. Switching to real data is the moment your system stops being a demo and starts being a product.
+
+We replaced the 6 hardcoded products with live data from **Fake Store API** (electronics category):
+
+```
+https://fakestoreapi.com/products/category/electronics
+```
+
+The API returns items like "WD 2TB External Hard Drive" and "SanDisk 1TB SSD" with real names, prices, and descriptions. We map them to our `Product` type:
+
+```ts
+cache = data.map((item) => ({
+  id: String(item.id),   // Fake Store uses numbers; we use strings
+  name: item.title,
+  price: item.price,
+  description: item.description,
+}))
+```
+
+### Caching with revalidation
+
+We don't hit the API on every request. The result is cached in two ways:
+- **In-memory**: once fetched per server instance, the products array is stored in a module-level variable
+- **Next.js fetch cache**: `next: { revalidate: 3600 }` tells Next.js to refresh the cached fetch response every hour
+
+This means: fast responses, no unnecessary API calls, and automatically fresh data every hour.
+
+The RAG embeddings are built from these live products, so the semantic search works just as well — it just now understands what a "WD hard drive" or a "SanDisk SSD" is.
+
+---
+
+## 15. CI/CD Pipeline — The Assembly Line
+
+**Analogy:** Imagine a car factory in the 1900s versus today. In the 1900s, workers hand-built each car from scratch — slow, inconsistent, prone to mistakes. Today, an assembly line moves the car through automated stations: one station checks safety, another checks paint, another runs the engine. A car that fails any station doesn't leave the factory.
+
+CI/CD is the software equivalent. Every time code is pushed, it moves through an automated pipeline:
+
+```
+Developer pushes to main
+        │
+        ▼
+GitHub Actions (CI — Continuous Integration)
+        │
+        │  1. Checkout code
+        │  2. Install dependencies
+        │  3. npm test → run all 32 tests
+        │
+        ├── FAIL → pipeline stops, deploy is blocked
+        │
+        └── PASS ↓
+        
+Deploy job (CD — Continuous Delivery)
+        │
+        │  1. vercel pull → download env vars from Vercel
+        │  2. vercel build → build the Next.js app
+        │  3. vercel deploy --prebuilt → ship to production
+        │
+        ▼
+Production (live at Vercel)
+```
+
+### Two jobs — test and deploy
+
+The pipeline has two jobs. `deploy` has `needs: test`, which means it won't even start unless `test` passes:
+
+```yaml
+jobs:
+  test:
+    steps:
+      - run: npm install
+      - run: npm test       # ← if this fails, deploy never runs
+
+  deploy:
+    needs: test             # ← depends on test passing
+    if: push to main only
+    steps:
+      - run: vercel pull
+      - run: vercel build --prod
+      - run: vercel deploy --prebuilt --prod
+```
+
+### Pull Requests get tested too
+
+The pipeline runs on `pull_request` as well, but the deploy job is skipped (it only runs on pushes to `main`). This means every PR shows a green or red check before you merge — so broken code never reaches `main` in the first place.
+
+### Why we disabled Vercel's GitHub integration
+
+Vercel has its own auto-deploy: push to GitHub → Vercel builds and deploys automatically, without any checks. We disabled this because it bypasses the test gate entirely. Now Vercel only deploys when our pipeline explicitly tells it to — after tests pass.
+
+---
+
+## 16. Chat UX — From Bare HTML to a Real Interface
+
+**Analogy:** A restaurant can serve great food on paper plates. The food is the same — but the experience feels completely different with proper plates, a nice table, and good lighting. UX is the presentation layer.
+
+We rebuilt the chat interface from bare unstyled HTML into a proper chat UI:
+
+- **Chat bubbles** — user messages on the right in indigo, assistant messages on the left in gray
+- **Markdown rendering** — Claude's responses use `**bold**`, `## headings`, and bullet lists; we render these properly instead of showing the raw symbols
+- **Tool call chips** — while the agent is working, animated chips appear showing which tool is running (`Searching products...`, `Checking stock...`)
+- **Suggestion buttons** — the empty state shows starter questions so new users aren't staring at a blank box
+- **Auto-resizing textarea** — the input grows as you type; Enter sends, Shift+Enter adds a new line
+- **Judgment badge** — the quality score appears as a small `5/5` badge under each response; hover it to read the judge's reasoning
+
+---
+
 ## The Full Stack
 
 ```
@@ -337,14 +513,21 @@ Browser (React)
 | Chat history | Conversation loaded from DB each turn | Support agent with memory |
 | Server-side persistence | Sessions + messages stored in PostgreSQL | Hotel guest registry |
 | Structured logging | JSON log per request with tokens, latency, score | Flight recorder / black box |
+| Unit tests | Test one function in isolation with fake inputs | Mechanic testing a single part |
+| Integration tests | Test how pieces work together end-to-end | Short test drive after assembly |
+| Mocking | Replace real dependencies with controlled fakes | Flight simulator |
+| Lazy initialization | Create expensive objects only when first needed | Boiling water only when making tea |
+| Live product data | Fetch real products from an external API | Switching from brochure to real inventory |
+| CI/CD pipeline | Automated test + deploy on every push | Factory assembly line with QC stations |
 
 ---
 
 ## What's Next
 
-All three original goals are complete. Some directions to explore from here:
+The core system is production-ready: agentic loop, persistence, observability, tests, CI/CD, and live data. Some directions to explore from here:
 
 - **A/B testing prompts**: route traffic between prompt versions and compare average judgment scores with real data
 - **Analytics dashboard**: query the structured logs to visualize quality trends, token spend, and tool usage over time
 - **Vector database** (Pinecone, Supabase pgvector): move embeddings out of memory into a persistent store that scales to thousands of products
-- **Real product data**: connect the tools to a real database or API instead of mock data
+- **Real e-commerce backend**: replace mock order/stock data with a real database or API (Shopify, WooCommerce, etc.)
+- **Test coverage reporting**: add `@vitest/coverage-v8` to measure which lines are covered and track it over time
