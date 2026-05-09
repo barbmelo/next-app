@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import Markdown from 'react-markdown'
 import type { Judgment } from '../lib/judge'
 
 type ChatMessage = {
@@ -146,19 +147,36 @@ export default function ProductChat() {
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className="max-w-[75%] space-y-1.5">
               <div
-                className={`rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'bg-indigo-600 text-white rounded-br-sm'
+                    ? 'bg-indigo-600 text-white rounded-br-sm whitespace-pre-wrap'
                     : 'bg-gray-100 text-gray-900 rounded-bl-sm'
                 }`}
               >
-                {msg.content || (loading && i === messages.length - 1 ? (
+                {msg.role === 'user' ? (
+                  msg.content
+                ) : msg.content ? (
+                  <Markdown
+                    components={{
+                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
+                      h1: ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                      h2: ({ children }) => <p className="font-semibold mb-1">{children}</p>,
+                      h3: ({ children }) => <p className="font-medium mb-1">{children}</p>,
+                      code: ({ children }) => <code className="bg-gray-200 rounded px-1 text-xs font-mono">{children}</code>,
+                    }}
+                  >
+                    {msg.content}
+                  </Markdown>
+                ) : loading && i === messages.length - 1 ? (
                   <span className="flex gap-1 items-center py-0.5">
                     <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
                     <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
                     <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
                   </span>
-                ) : null)}
+                ) : null}
               </div>
 
               {msg.role === 'assistant' && msg.judgment && (
