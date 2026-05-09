@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { getPrompt } from '../lib/prompts'
 
 describe('getPrompt', () => {
-  it('returns the active version (4)', () => {
+  it('returns the active version (5)', () => {
     const { version } = getPrompt('product-qa')
-    expect(version).toBe(4)
+    expect(version).toBe(5)
   })
 
   it('returns a string system prompt', () => {
@@ -12,7 +12,7 @@ describe('getPrompt', () => {
     expect(typeof system).toBe('string')
   })
 
-  it('v4 prompt instructs use of tools', () => {
+  it('v5 prompt instructs use of tools', () => {
     const { system } = getPrompt('product-qa')
     expect(system).toContain('search_products')
     expect(system).toContain('check_order_status')

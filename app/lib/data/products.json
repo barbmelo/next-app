@@ -25,14 +25,14 @@
   },
   {
     "id": "13",
-    "name": "Acer SB220Q bi 21.5 inches Full HD (1920 x 1080) IPS Ultra-Thin",
+    "name": "Acer SB220Q 21.5-inch Full HD IPS Monitor",
     "price": 599,
-    "description": "21.5 inches Full HD (1920 x 1080) widescreen IPS display with Radeon FreeSync technology. Zero-frame design, ultra-thin, 4ms response time, IPS panel. 75Hz refresh rate, 16.7 million colors, 250 nit brightness. Horizontal and vertical viewing angle 178 degrees."
+    "description": "21.5-inch Full HD (1920x1080) IPS monitor with Radeon FreeSync technology. Zero-frame ultra-thin design, 4ms response time, 75Hz refresh rate, 250 nit brightness, 178-degree viewing angles. Ideal as a desktop monitor or second screen."
   },
   {
     "id": "14",
     "name": "Samsung 49-Inch CHG90 144Hz Curved Gaming Monitor - Super Ultrawide QLED",
     "price": 999.99,
-    "description": "49-inch Super Ultrawide 32:9 curved gaming monitor with dual 27-inch screen side by side. Quantum Dot (QLED) technology with HDR support. 144Hz high refresh rate and 1ms response time eliminate motion blur and ghosting."
+    "description": "49-inch Super Ultrawide 32:9 curved gaming monitor. Quantum Dot (QLED) technology with HDR support. 144Hz refresh rate and 1ms response time eliminate motion blur. Ideal for gaming and multi-screen productivity setups."
   }
 ]
