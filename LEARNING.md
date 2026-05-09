@@ -456,6 +456,71 @@ We rebuilt the chat interface from bare unstyled HTML into a proper chat UI:
 
 ---
 
+## 17. Production Debugging — Reading the Black Box
+
+**Analogy:** When a plane lands safely, nobody reads the flight recorder. But when something goes wrong mid-flight, the black box is the only way to know what actually happened. Production bugs are the same — you can't reproduce them locally, so you rely entirely on what was logged.
+
+We hit three real production bugs after deploying. Each one taught a different lesson.
+
+### Bug 1 — SDK clients throwing at build time
+
+**Symptom:** GitHub Actions build failed with `Missing credentials` for OpenAI, then later `No database connection string` for Neon.
+
+**Cause:** `new OpenAI()`, `new Anthropic()`, and `neon()` were all called at the *top level of their modules*. Next.js imports every route during its build phase to analyze it — with no env vars available. Each constructor threw immediately.
+
+**Fix:** Move client creation inside the function body so it only runs when an actual request arrives, not at import time:
+
+```ts
+// Breaks at build time
+const openai = new OpenAI()
+
+// Safe — only runs when called
+async function retrieveProducts(query: string) {
+  const openai = new OpenAI()
+  ...
+}
+```
+
+**Lesson:** Any code at module scope runs during the build. Constructors that read env vars must be lazy.
+
+---
+
+### Bug 2 — Third-party API blocked by Vercel (403)
+
+**Symptom:** The assistant responded with a vague apology about the product search system not working. All HTTP responses were 200 — no obvious error.
+
+**Why 200s are misleading here:** The route handler always returns 200 because the SSE stream starts fine. Tool errors are caught inside the agent loop, passed back to Claude as text, and Claude composes a polite apology. The route never throws — it just delivers bad content.
+
+**How we found it:** We added `console.error('[tool:search_products]', err)` to the tool error handler. The next deploy showed `Fake Store API responded with 403` in the function logs.
+
+**Cause:** Fake Store API blocks requests from Vercel's server IP ranges.
+
+**Fix:** Fetch the data once locally, commit it as `app/lib/data/products.json`, and import it directly. No runtime network call, no third-party dependency, instant access.
+
+**Lesson:** A 200 status code only means the stream started. Always log tool errors explicitly so they show up in function logs — otherwise failures are invisible.
+
+---
+
+### Bug 3 — RAG returning wrong products, agent using wrong tool inputs
+
+**Symptom:** Customer asked about monitors. The agent checked availability for SSDs and hard drives instead, then couldn't find shipping for the monitors.
+
+**Two root causes:**
+
+1. **Missing keyword in product data.** The Acer monitor's name was `"Acer SB220Q bi 21.5 inches Full HD (1920 x 1080) IPS Ultra-Thin"` — no word "monitor" anywhere. The RAG embedding for this product was far from the "monitor" query vector. The product simply didn't exist in the search results.
+
+2. **Agent calling tools with names instead of IDs.** The v4 prompt said "call `check_product_availability` before recommending a product" but didn't say *how*. Claude would sometimes call it with `sku: "monitor"` (a generic name) instead of `sku: "13"` (the product ID from search results). The name lookup is a substring match — it doesn't find "Acer" when given "monitor".
+
+**Fix 1 — Data quality:** Renamed the product to `"Acer SB220Q 21.5-inch Full HD IPS Monitor"` so the embedding includes the word "monitor".
+
+**Fix 2 — Prompt v5:** Added explicit instructions:
+- *"Always call `search_products` first. Use the product IDs returned by `search_products` when calling `check_product_availability` or `get_shipping_estimate`."*
+- *"Never expose internal tool errors or system failures to the customer."*
+
+**Lesson:** RAG quality depends entirely on how well your data is described. A product with no searchable keywords is invisible to semantic search. And prompts must be explicit about *how* to use tool results — not just *when* to call tools.
+
+---
+
 ## The Full Stack
 
 ```
@@ -519,6 +584,9 @@ Browser (React)
 | Lazy initialization | Create expensive objects only when first needed | Boiling water only when making tea |
 | Live product data | Fetch real products from an external API | Switching from brochure to real inventory |
 | CI/CD pipeline | Automated test + deploy on every push | Factory assembly line with QC stations |
+| Production debugging | Read logs to find errors invisible in local dev | Opening the flight recorder after an incident |
+| Data quality for RAG | Product descriptions must include searchable keywords | A library with books that have no titles |
+| Prompt precision | Tell the model *how* to use tools, not just *when* | A recipe that says "add seasoning" vs exact amounts |
 
 ---
 
