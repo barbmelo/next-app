@@ -1,7 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 vi.mock('../lib/anthropic', () => ({
-  anthropic: { messages: { create: vi.fn() } },
+  getAnthropic: vi.fn(() => ({ messages: { create: vi.fn() } })),
 }))
 
 vi.mock('../lib/tools', () => ({
@@ -10,10 +10,11 @@ vi.mock('../lib/tools', () => ({
 }))
 
 import { runAgent } from '../lib/agent'
-import { anthropic } from '../lib/anthropic'
+import { getAnthropic } from '../lib/anthropic'
 import { executeTool } from '../lib/tools'
 
-const mockCreate = vi.mocked(anthropic.messages.create)
+const mockCreate = vi.fn()
+vi.mocked(getAnthropic).mockReturnValue({ messages: { create: mockCreate } } as ReturnType<typeof getAnthropic>)
 
 function makeEndTurnResponse(text: string, inputTokens = 10, outputTokens = 5) {
   return {

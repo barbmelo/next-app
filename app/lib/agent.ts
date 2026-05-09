@@ -1,6 +1,6 @@
 import 'server-only'
 import type Anthropic from '@anthropic-ai/sdk'
-import { anthropic } from './anthropic'
+import { getAnthropic } from './anthropic'
 import { TOOL_DEFINITIONS, executeTool } from './tools'
 
 const MAX_ITERATIONS = 10
@@ -34,7 +34,7 @@ export async function runAgent(
     let response: Anthropic.Messages.Message
 
     try {
-      response = await anthropic.messages.create({
+      response = await getAnthropic().messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system,

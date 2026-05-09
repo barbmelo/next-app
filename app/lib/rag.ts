@@ -2,8 +2,6 @@ import 'server-only'
 import OpenAI from 'openai'
 import { getProducts, type Product } from './products'
 
-const openai = new OpenAI()
-
 type ProductWithEmbedding = {
   product: Product
   embedding: number[]
@@ -21,6 +19,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 async function getProductEmbeddings(): Promise<ProductWithEmbedding[]> {
   if (cache) return cache
 
+  const openai = new OpenAI()
   const products = await getProducts()
 
   const response = await openai.embeddings.create({
@@ -37,6 +36,7 @@ async function getProductEmbeddings(): Promise<ProductWithEmbedding[]> {
 }
 
 export async function retrieveProducts(query: string, topK = 2): Promise<Product[]> {
+  const openai = new OpenAI()
   const [productEmbeddings, queryResponse] = await Promise.all([
     getProductEmbeddings(),
     openai.embeddings.create({ model: 'text-embedding-3-small', input: query }),

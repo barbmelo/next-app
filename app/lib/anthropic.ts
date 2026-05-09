@@ -1,4 +1,9 @@
 import 'server-only'
 import Anthropic from '@anthropic-ai/sdk'
 
-export const anthropic = new Anthropic()
+let _client: Anthropic | null = null
+
+export function getAnthropic(): Anthropic {
+  if (!_client) _client = new Anthropic()
+  return _client
+}

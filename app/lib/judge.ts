@@ -1,5 +1,5 @@
 import 'server-only'
-import { anthropic } from './anthropic'
+import { getAnthropic } from './anthropic'
 import type { TokenUsage } from './agent'
 
 export type Judgment = {
@@ -39,7 +39,7 @@ export async function judgeResponse(
       ? `Tools used: ${toolCallsLog.join(', ')}`
       : `Product context:\n${context}`
 
-  const msg = await anthropic.messages.create({
+  const msg = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 256,
     system: JUDGE_PROMPT,
