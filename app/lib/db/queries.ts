@@ -1,18 +1,18 @@
 import 'server-only'
 import { eq } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
-import { db } from './index'
+import { getDb } from './index'
 import { sessions, messages } from './schema'
 
 export async function createSession(): Promise<string> {
   const id = randomUUID()
-  await db.insert(sessions).values({ id })
+  await getDb().insert(sessions).values({ id })
   return id
 }
 
 export async function getOrCreateSession(sessionId?: string): Promise<string> {
   if (sessionId) {
-    const existing = await db
+    const existing = await getDb()
       .select()
       .from(sessions)
       .where(eq(sessions.id, sessionId))
@@ -27,13 +27,13 @@ export async function saveMessage(
   role: 'user' | 'assistant',
   content: string
 ): Promise<void> {
-  await db.insert(messages).values({ sessionId, role, content })
+  await getDb().insert(messages).values({ sessionId, role, content })
 }
 
 export async function getMessages(
   sessionId: string
 ): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
-  const rows = await db
+  const rows = await getDb()
     .select({ role: messages.role, content: messages.content })
     .from(messages)
     .where(eq(messages.sessionId, sessionId))
