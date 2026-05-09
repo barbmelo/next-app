@@ -1,7 +1,7 @@
 import 'server-only'
 import type Anthropic from '@anthropic-ai/sdk'
 import { retrieveProducts } from './rag'
-import { products } from './products'
+import { getProducts } from './products'
 
 export const TOOL_DEFINITIONS: Anthropic.Messages.Tool[] = [
   {
@@ -96,12 +96,12 @@ const MOCK_ORDERS: Record<string, OrderStatus> = {
 type StockInfo = { in_stock: boolean; quantity: number }
 
 const MOCK_STOCK: Record<string, StockInfo> = {
-  '1': { in_stock: true, quantity: 42 },
-  '2': { in_stock: true, quantity: 15 },
-  '3': { in_stock: false, quantity: 0 },
-  '4': { in_stock: true, quantity: 88 },
-  '5': { in_stock: true, quantity: 7 },
-  '6': { in_stock: true, quantity: 23 },
+  '9':  { in_stock: true,  quantity: 42 },
+  '10': { in_stock: true,  quantity: 15 },
+  '11': { in_stock: false, quantity: 0  },
+  '12': { in_stock: true,  quantity: 88 },
+  '13': { in_stock: true,  quantity: 7  },
+  '14': { in_stock: true,  quantity: 23 },
 }
 
 // --- Tool implementations ---
@@ -120,21 +120,22 @@ function checkOrderStatus(input: Record<string, unknown>): string {
   return JSON.stringify({ order_id: orderId, ...order })
 }
 
-function checkProductAvailability(input: Record<string, unknown>): string {
+async function checkProductAvailability(input: Record<string, unknown>): Promise<string> {
   const sku = String(input.sku ?? '')
-  // Support lookup by ID or by name
+  const products = await getProducts()
   const product =
     products.find((p) => p.id === sku) ??
     products.find((p) => p.name.toLowerCase().includes(sku.toLowerCase()))
 
   if (!product) return `Product "${sku}" not found in catalog.`
-  const stock = MOCK_STOCK[product.id] ?? { in_stock: false, quantity: 0 }
+  const stock = MOCK_STOCK[product.id] ?? { in_stock: true, quantity: 99 }
   return JSON.stringify({ product_id: product.id, name: product.name, ...stock })
 }
 
-function getShippingEstimate(input: Record<string, unknown>): string {
+async function getShippingEstimate(input: Record<string, unknown>): Promise<string> {
   const productId = String(input.product_id ?? '')
   const zipCode = String(input.zip_code ?? '')
+  const products = await getProducts()
   const product = products.find((p) => p.id === productId)
   if (!product) return `Product ID "${productId}" not found.`
 

@@ -1,6 +1,6 @@
 import 'server-only'
 import OpenAI from 'openai'
-import { products, type Product } from './products'
+import { getProducts, type Product } from './products'
 
 const openai = new OpenAI()
 
@@ -20,6 +20,8 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 async function getProductEmbeddings(): Promise<ProductWithEmbedding[]> {
   if (cache) return cache
+
+  const products = await getProducts()
 
   const response = await openai.embeddings.create({
     model: 'text-embedding-3-small',

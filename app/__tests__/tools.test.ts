@@ -4,6 +4,14 @@ vi.mock('../lib/rag', () => ({
   retrieveProducts: vi.fn(),
 }))
 
+vi.mock('../lib/products', () => ({
+  getProducts: vi.fn().mockResolvedValue([
+    { id: '9',  name: 'WD 2TB External Hard Drive', price: 64,  description: 'USB 3.0 portable hard drive' },
+    { id: '10', name: 'SanDisk 1TB SSD',             price: 109, description: 'Internal solid state drive' },
+    { id: '11', name: 'Silicon Power 256GB SSD',      price: 58,  description: 'Compact solid state drive' },
+  ]),
+}))
+
 import { executeTool } from '../lib/tools'
 import { retrieveProducts } from '../lib/rag'
 
@@ -50,31 +58,31 @@ describe('check_order_status', () => {
 
 describe('check_product_availability', () => {
   it('returns stock info by product ID', async () => {
-    const result = await executeTool('check_product_availability', { sku: '1' })
+    const result = await executeTool('check_product_availability', { sku: '9' })
     const parsed = JSON.parse(result)
     expect(parsed.in_stock).toBe(true)
     expect(parsed.quantity).toBe(42)
-    expect(parsed.product_id).toBe('1')
+    expect(parsed.product_id).toBe('9')
   })
 
-  it('returns out-of-stock for product 3', async () => {
-    const result = await executeTool('check_product_availability', { sku: '3' })
+  it('returns out-of-stock for product 11', async () => {
+    const result = await executeTool('check_product_availability', { sku: '11' })
     const parsed = JSON.parse(result)
     expect(parsed.in_stock).toBe(false)
     expect(parsed.quantity).toBe(0)
   })
 
   it('supports lookup by partial name', async () => {
-    const result = await executeTool('check_product_availability', { sku: 'Lumina' })
+    const result = await executeTool('check_product_availability', { sku: 'SanDisk' })
     const parsed = JSON.parse(result)
-    expect(parsed.product_id).toBe('1')
-    expect(parsed.name).toContain('Lumina')
+    expect(parsed.product_id).toBe('10')
+    expect(parsed.name).toContain('SanDisk')
   })
 
   it('is case-insensitive for name lookup', async () => {
-    const result = await executeTool('check_product_availability', { sku: 'lumina' })
+    const result = await executeTool('check_product_availability', { sku: 'sandisk' })
     const parsed = JSON.parse(result)
-    expect(parsed.product_id).toBe('1')
+    expect(parsed.product_id).toBe('10')
   })
 
   it('returns not-found for unknown product', async () => {
@@ -85,7 +93,7 @@ describe('check_product_availability', () => {
 
 describe('get_shipping_estimate', () => {
   it('returns three shipping options for a valid product', async () => {
-    const result = await executeTool('get_shipping_estimate', { product_id: '1', zip_code: '10001' })
+    const result = await executeTool('get_shipping_estimate', { product_id: '9', zip_code: '10001' })
     const parsed = JSON.parse(result)
     expect(parsed.options).toHaveLength(3)
     expect(parsed.options[0].method).toBe('Standard')
@@ -94,15 +102,15 @@ describe('get_shipping_estimate', () => {
   })
 
   it('includes the destination zip code', async () => {
-    const result = await executeTool('get_shipping_estimate', { product_id: '2', zip_code: '90210' })
+    const result = await executeTool('get_shipping_estimate', { product_id: '10', zip_code: '90210' })
     const parsed = JSON.parse(result)
     expect(parsed.destination_zip).toBe('90210')
   })
 
   it('includes the product name', async () => {
-    const result = await executeTool('get_shipping_estimate', { product_id: '1', zip_code: '10001' })
+    const result = await executeTool('get_shipping_estimate', { product_id: '9', zip_code: '10001' })
     const parsed = JSON.parse(result)
-    expect(parsed.product).toContain('Lumina')
+    expect(parsed.product).toContain('WD')
   })
 
   it('returns not-found for unknown product ID', async () => {
