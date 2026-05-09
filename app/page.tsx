@@ -2,9 +2,9 @@ import ProductChat from './components/ProductChat'
 
 export default function Home() {
   return (
-    <main className="flex flex-col h-screen bg-white">
+    <main className="flex flex-col h-screen bg-brand-50">
       <header className="shrink-0 border-b border-gray-100 px-6 py-4 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
+        <div className="w-8 h-8 rounded-lg bg-brand-400 flex items-center justify-center text-white text-sm font-bold">
           E
         </div>
         <div>

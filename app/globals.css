@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-50:  lab(97 4 -5);
+  --color-brand-100: lab(93 10 -12);
+  --color-brand-200: lab(85 18 -22);
+  --color-brand-400: lab(77 30.59 -35.11);
+  --color-brand-600: lab(48 38 -50);
+  --color-brand-700: lab(40 38 -50);
+}
+
 html,
 body {
   height: 100%;

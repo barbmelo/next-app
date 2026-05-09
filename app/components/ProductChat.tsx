@@ -134,7 +134,7 @@ export default function ProductChat() {
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="text-sm bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-600 px-3 py-1.5 rounded-full transition-colors"
+                  className="text-sm bg-brand-100 hover:bg-brand-200 border border-brand-200 text-brand-600 px-3 py-1.5 rounded-full transition-colors"
                 >
                   {s}
                 </button>
@@ -149,7 +149,7 @@ export default function ProductChat() {
               <div
                 className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                   msg.role === 'user'
-                    ? 'bg-indigo-600 text-white rounded-br-sm whitespace-pre-wrap'
+                    ? 'bg-brand-600 text-white rounded-br-sm whitespace-pre-wrap'
                     : 'bg-gray-100 text-gray-900 rounded-bl-sm'
                 }`}
               >
@@ -211,9 +211,9 @@ export default function ProductChat() {
               {activeToolCalls.map((tool, i) => (
                 <span
                   key={i}
-                  className="text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-3 py-1 rounded-full flex items-center gap-1.5"
+                  className="text-xs bg-brand-100 text-brand-600 border border-brand-200 px-3 py-1 rounded-full flex items-center gap-1.5"
                 >
-                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse" />
+                  <span className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-pulse" />
                   {TOOL_LABELS[tool] ?? tool}
                 </span>
               ))}
@@ -225,7 +225,7 @@ export default function ProductChat() {
       </div>
 
       {/* Input */}
-      <div className="shrink-0 border-t border-gray-100 px-4 py-4 bg-white">
+      <div className="shrink-0 border-t border-brand-200 px-4 py-4 bg-brand-50">
         <form onSubmit={handleSubmit} className="flex gap-2 items-end max-w-3xl mx-auto">
           <textarea
             ref={textareaRef}
@@ -240,12 +240,12 @@ export default function ProductChat() {
             placeholder="Ask about products, orders, or shipping…"
             disabled={loading}
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
+            className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="shrink-0 rounded-xl bg-indigo-600 text-white px-5 py-3 text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="shrink-0 rounded-xl bg-brand-600 text-white px-5 py-3 text-sm font-medium hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Send
           </button>
