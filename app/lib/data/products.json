@@ -1,0 +1,38 @@
+[
+  {
+    "id": "9",
+    "name": "WD 2TB Elements Portable External Hard Drive - USB 3.0",
+    "price": 64,
+    "description": "USB 3.0 and USB 2.0 Compatibility Fast data transfers Improve PC Performance High Capacity; Compatibility Formatted NTFS for Windows 10, Windows 8.1, Windows 7; Reformatting may be required for other operating systems; Compatibility may vary depending on user's hardware configuration and operating system"
+  },
+  {
+    "id": "10",
+    "name": "SanDisk SSD PLUS 1TB Internal SSD - SATA III 6 Gb/s",
+    "price": 109,
+    "description": "Easy upgrade for faster boot up, shutdown, application load and response. Boosts burst write performance, making it ideal for typical PC workloads. The perfect balance of performance and reliability. Read/write speeds of up to 535MB/s/450MB/s."
+  },
+  {
+    "id": "11",
+    "name": "Silicon Power 256GB SSD 3D NAND A55 SLC Cache Performance Boost SATA III 2.5",
+    "price": 109,
+    "description": "3D NAND flash are applied to deliver high transfer speeds. The advanced SLC Cache Technology allows performance boost and longer lifespan. 7mm slim design suitable for Ultrabooks and Ultra-slim notebooks. Supports TRIM command, Garbage Collection technology, RAID, and ECC."
+  },
+  {
+    "id": "12",
+    "name": "WD 4TB Gaming Drive Works with Playstation 4 Portable External Hard Drive",
+    "price": 114,
+    "description": "Expand your PS4 gaming experience. Play anywhere. Fast and easy setup. Sleek design with high capacity. 3-year manufacturer's limited warranty."
+  },
+  {
+    "id": "13",
+    "name": "Acer SB220Q bi 21.5 inches Full HD (1920 x 1080) IPS Ultra-Thin",
+    "price": 599,
+    "description": "21.5 inches Full HD (1920 x 1080) widescreen IPS display with Radeon FreeSync technology. Zero-frame design, ultra-thin, 4ms response time, IPS panel. 75Hz refresh rate, 16.7 million colors, 250 nit brightness. Horizontal and vertical viewing angle 178 degrees."
+  },
+  {
+    "id": "14",
+    "name": "Samsung 49-Inch CHG90 144Hz Curved Gaming Monitor - Super Ultrawide QLED",
+    "price": 999.99,
+    "description": "49-inch Super Ultrawide 32:9 curved gaming monitor with dual 27-inch screen side by side. Quantum Dot (QLED) technology with HDR support. 144Hz high refresh rate and 1ms response time eliminate motion blur and ghosting."
+  }
+]
