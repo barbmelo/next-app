@@ -76,6 +76,7 @@ export async function runAgent(
           try {
             content = await executeTool(block.name, block.input as Record<string, unknown>)
           } catch (err) {
+            console.error(`[tool:${block.name}]`, err)
             content = `Error executing ${block.name}: ${err instanceof Error ? err.message : 'unknown error'}`
           }
 
