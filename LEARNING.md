@@ -521,7 +521,65 @@ async function retrieveProducts(query: string) {
 
 ---
 
-## The Full Stack
+## 18. Developer Tooling — Making the System Transparent
+
+**Analogy:** Imagine you're maintaining a vending machine. The customer sees buttons and a slot. But you, as the technician, need a service panel: a small hidden door that shows the current inventory, whether the motors are working, and what the last errors were — all without having to physically open the machine. Good developer tooling is that service panel.
+
+We added two tools for exactly this.
+
+### Cache inspection endpoint (`/api/cache`)
+
+The assistant uses two in-memory caches that aren't visible from the outside:
+- **Products cache** — the static product catalog loaded from `products.json`
+- **RAG cache** — the OpenAI embeddings built the first time `search_products` is called
+
+Without a way to inspect these, you'd have to guess whether the embeddings were warm or cold, or whether the products loaded correctly.
+
+`GET /api/cache` exposes both:
+
+```json
+{
+  "products": {
+    "loaded": true,
+    "count": 6,
+    "products": [{ "id": "9", "name": "...", ... }]
+  },
+  "rag": {
+    "loaded": false,
+    "count": 0,
+    "products": []
+  }
+}
+```
+
+`rag.loaded: false` means no search has happened yet and the embeddings haven't been built. After the first conversation involving a product search, `rag.loaded` flips to `true`. This lets you confirm the warm-up happened without digging through logs.
+
+### Interactive API docs (`/api/docs`)
+
+Testing an API usually requires a separate tool — Postman, curl, or a browser extension. **Scalar** eliminates that: it renders an interactive documentation page directly inside the app at `/api/docs`.
+
+```
+Spring Boot equivalent: springdoc-openapi (Swagger UI)
+```
+
+The setup has two parts:
+
+1. **`app/api/docs/openapi.ts`** — an OpenAPI 3.1 spec written as a TypeScript object. Describes every endpoint: path, method, request body shape, response shape, and example values.
+
+2. **`app/api/docs/route.ts`** — a single Next.js route that imports `ApiReference` from `@scalar/nextjs-api-reference` and serves the full HTML UI:
+
+```ts
+export const GET = ApiReference({
+  content: openApiSpec,
+  pageTitle: 'Electronics Store API',
+})
+```
+
+Open `/api/docs` in a browser and you get the full interface: expandable endpoint cards, schema explorer, and a "Try it" button that sends real requests and shows the live response — no Postman needed.
+
+---
+
+
 
 ```
 Browser (React)
@@ -587,6 +645,8 @@ Browser (React)
 | Production debugging | Read logs to find errors invisible in local dev | Opening the flight recorder after an incident |
 | Data quality for RAG | Product descriptions must include searchable keywords | A library with books that have no titles |
 | Prompt precision | Tell the model *how* to use tools, not just *when* | A recipe that says "add seasoning" vs exact amounts |
+| Cache inspection | Endpoint to check in-memory state without reading logs | Vending machine service panel |
+| API documentation | Interactive browser UI to explore and test endpoints | Swagger UI for Next.js (via Scalar) |
 
 ---
 
@@ -599,3 +659,4 @@ The core system is production-ready: agentic loop, persistence, observability, t
 - **Vector database** (Pinecone, Supabase pgvector): move embeddings out of memory into a persistent store that scales to thousands of products
 - **Real e-commerce backend**: replace mock order/stock data with a real database or API (Shopify, WooCommerce, etc.)
 - **Test coverage reporting**: add `@vitest/coverage-v8` to measure which lines are covered and track it over time
+- **Expand the OpenAPI spec**: as new endpoints are added, keep `openapi.ts` updated — it doubles as live documentation and a contract for future integrations
