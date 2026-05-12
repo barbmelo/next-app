@@ -35,6 +35,12 @@ async function getProductEmbeddings(): Promise<ProductWithEmbedding[]> {
   return cache
 }
 
+export function getRagCache() {
+  return cache
+    ? { loaded: true, count: cache.length, products: cache.map((e) => e.product.name) }
+    : { loaded: false, count: 0, products: [] }
+}
+
 export async function retrieveProducts(query: string, topK = 2): Promise<Product[]> {
   const openai = new OpenAI()
   const [productEmbeddings, queryResponse] = await Promise.all([
