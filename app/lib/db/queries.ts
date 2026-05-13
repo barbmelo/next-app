@@ -2,7 +2,7 @@ import 'server-only'
 import { eq } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 import { getDb } from './index'
-import { sessions, messages } from './schema'
+import { sessions, messages, productEmbeddings } from './schema'
 
 export async function createSession(): Promise<string> {
   const id = randomUUID()
@@ -43,4 +43,20 @@ export async function getMessages(
     role: r.role as 'user' | 'assistant',
     content: r.content,
   }))
+}
+
+export async function getStoredEmbeddings(): Promise<Map<string, number[]>> {
+  const rows = await getDb()
+    .select({ productId: productEmbeddings.productId, embedding: productEmbeddings.embedding })
+    .from(productEmbeddings)
+  return new Map(rows.map((r) => [r.productId, JSON.parse(r.embedding) as number[]]))
+}
+
+export async function saveEmbeddings(
+  entries: { productId: string; embedding: number[] }[]
+): Promise<void> {
+  await getDb()
+    .insert(productEmbeddings)
+    .values(entries.map((e) => ({ productId: e.productId, embedding: JSON.stringify(e.embedding) })))
+    .onConflictDoNothing()
 }

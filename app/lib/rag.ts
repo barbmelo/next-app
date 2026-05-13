@@ -1,6 +1,7 @@
 import 'server-only'
 import OpenAI from 'openai'
 import { getProducts, type Product } from './products'
+import { getStoredEmbeddings, saveEmbeddings } from './db/queries'
 
 let _openai: OpenAI | null = null
 function getOpenAI(): OpenAI {
@@ -26,15 +27,31 @@ async function getProductEmbeddings(): Promise<ProductWithEmbedding[]> {
   if (cache) return cache
 
   const products = await getProducts()
+  const stored = await getStoredEmbeddings()
 
-  const response = await getOpenAI().embeddings.create({
-    model: 'text-embedding-3-small',
-    input: products.map((p) => `${p.name}: ${p.description}`),
-  })
+  const missing = products.filter((p) => !stored.has(p.id))
 
-  cache = products.map((product, i) => ({
+  if (missing.length > 0) {
+    const response = await getOpenAI().embeddings.create({
+      model: 'text-embedding-3-small',
+      input: missing.map((p) => `${p.name}: ${p.description}`),
+    })
+
+    const newEntries = missing.map((product, i) => ({
+      productId: product.id,
+      embedding: response.data[i].embedding,
+    }))
+
+    await saveEmbeddings(newEntries)
+
+    for (const { productId, embedding } of newEntries) {
+      stored.set(productId, embedding)
+    }
+  }
+
+  cache = products.map((product) => ({
     product,
-    embedding: response.data[i].embedding,
+    embedding: stored.get(product.id)!,
   }))
 
   return cache
@@ -47,14 +64,14 @@ export function getRagCache() {
 }
 
 export async function retrieveProducts(query: string, topK = 2): Promise<Product[]> {
-  const [productEmbeddings, queryResponse] = await Promise.all([
+  const [embeddings, queryResponse] = await Promise.all([
     getProductEmbeddings(),
     getOpenAI().embeddings.create({ model: 'text-embedding-3-small', input: query }),
   ])
 
   const queryEmbedding = queryResponse.data[0].embedding
 
-  return productEmbeddings
+  return embeddings
     .map(({ product, embedding }) => ({
       product,
       score: cosineSimilarity(queryEmbedding, embedding),
