@@ -23,7 +23,7 @@ const SUGGESTIONS = [
   'I need something for long flights',
   'Where is my order ORD-1001?',
   'What is in stock under $60?',
-  'Get me shipping rates for product 1 to 10001',
+  'Get me shipping rates for product 9 to 10001',
 ]
 
 export default function ProductChat() {
@@ -64,7 +64,20 @@ export default function ProductChat() {
       body: JSON.stringify({ message: text, session_id: sessionId }),
     })
 
-    const reader = res.body!.getReader()
+    if (!res.ok || !res.body) {
+      setMessages((prev) => {
+        const updated = [...prev]
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          content: 'Something went wrong. Please try again.',
+        }
+        return updated
+      })
+      setLoading(false)
+      return
+    }
+
+    const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
 

@@ -1,4 +1,5 @@
 import 'server-only'
+import { randomUUID } from 'crypto'
 import type Anthropic from '@anthropic-ai/sdk'
 import { retrieveProducts } from './rag'
 import { getProducts } from './products'
@@ -87,10 +88,10 @@ type OrderStatus = {
 }
 
 const MOCK_ORDERS: Record<string, OrderStatus> = {
-  'ORD-1001': { status: 'shipped', carrier: 'UPS', tracking: '1Z999AA10123456784', eta: '2026-05-10' },
-  'ORD-1002': { status: 'processing', estimated_ship_date: '2026-05-09' },
-  'ORD-1003': { status: 'delivered', delivered_at: '2026-05-07', signed_by: 'Front Door' },
-  'ORD-1004': { status: 'cancelled', cancelled_at: '2026-05-06', reason: 'Customer request' },
+  'ORD-1001': { status: 'shipped', carrier: 'UPS', tracking: '1Z999AA10123456784', eta: '2026-05-20' },
+  'ORD-1002': { status: 'processing', estimated_ship_date: '2026-05-16' },
+  'ORD-1003': { status: 'delivered', delivered_at: '2026-05-10', signed_by: 'Front Door' },
+  'ORD-1004': { status: 'cancelled', cancelled_at: '2026-05-08', reason: 'Customer request' },
 }
 
 type StockInfo = { in_stock: boolean; quantity: number }
@@ -150,12 +151,10 @@ async function getShippingEstimate(input: Record<string, unknown>): Promise<stri
   })
 }
 
-let ticketCounter = 1000
-
 function escalateToSupport(input: Record<string, unknown>): string {
   const reason = String(input.reason ?? '')
   const priority = String(input.priority ?? 'medium')
-  const ticketId = `TKT-${++ticketCounter}`
+  const ticketId = `TKT-${randomUUID().slice(0, 8).toUpperCase()}`
   console.log(`[ESCALATION] ${ticketId} | priority=${priority} | reason=${reason}`)
   return JSON.stringify({
     ticket_id: ticketId,

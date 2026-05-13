@@ -51,9 +51,17 @@ export async function judgeResponse(
     ],
   })
 
-  const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
+  const text = msg.content[0].type === 'text' ? msg.content[0].text : ''
+
+  let judgment: Judgment
+  try {
+    judgment = JSON.parse(text) as Judgment
+  } catch {
+    judgment = { score: 0, passed: false, reason: 'Judge returned malformed output.' }
+  }
+
   return {
-    judgment: JSON.parse(text) as Judgment,
+    judgment,
     usage: {
       input_tokens: msg.usage.input_tokens,
       output_tokens: msg.usage.output_tokens,

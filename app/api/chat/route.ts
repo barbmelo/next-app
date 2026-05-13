@@ -7,8 +7,19 @@ import type { NextRequest } from 'next/server'
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
 
-  const { message, session_id }: { message: string; session_id?: string } =
-    await request.json()
+  let message: string
+  let session_id: string | undefined
+  try {
+    const body = await request.json()
+    message = body.message
+    session_id = body.session_id
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400 })
+  }
+
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return new Response(JSON.stringify({ error: 'message is required' }), { status: 400 })
+  }
 
   const sessionId = await getOrCreateSession(session_id)
   const history = await getMessages(sessionId)

@@ -8,8 +8,9 @@ let _db: NeonHttpDatabase<typeof schema> | null = null
 
 export function getDb(): NeonHttpDatabase<typeof schema> {
   if (!_db) {
-    const sql = neon(process.env.DATABASE_URL!)
-    _db = drizzle(sql, { schema })
+    const url = process.env.DATABASE_URL
+    if (!url) throw new Error('DATABASE_URL environment variable is not set')
+    _db = drizzle(neon(url), { schema })
   }
   return _db
 }

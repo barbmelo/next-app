@@ -2,6 +2,12 @@ import 'server-only'
 import OpenAI from 'openai'
 import { getProducts, type Product } from './products'
 
+let _openai: OpenAI | null = null
+function getOpenAI(): OpenAI {
+  if (!_openai) _openai = new OpenAI()
+  return _openai
+}
+
 type ProductWithEmbedding = {
   product: Product
   embedding: number[]
@@ -19,10 +25,9 @@ function cosineSimilarity(a: number[], b: number[]): number {
 async function getProductEmbeddings(): Promise<ProductWithEmbedding[]> {
   if (cache) return cache
 
-  const openai = new OpenAI()
   const products = await getProducts()
 
-  const response = await openai.embeddings.create({
+  const response = await getOpenAI().embeddings.create({
     model: 'text-embedding-3-small',
     input: products.map((p) => `${p.name}: ${p.description}`),
   })
@@ -42,10 +47,9 @@ export function getRagCache() {
 }
 
 export async function retrieveProducts(query: string, topK = 2): Promise<Product[]> {
-  const openai = new OpenAI()
   const [productEmbeddings, queryResponse] = await Promise.all([
     getProductEmbeddings(),
-    openai.embeddings.create({ model: 'text-embedding-3-small', input: query }),
+    getOpenAI().embeddings.create({ model: 'text-embedding-3-small', input: query }),
   ])
 
   const queryEmbedding = queryResponse.data[0].embedding

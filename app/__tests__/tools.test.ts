@@ -123,17 +123,17 @@ describe('escalate_to_support', () => {
   it('creates a support ticket with the correct format', async () => {
     const result = await executeTool('escalate_to_support', { reason: 'Broken product', priority: 'high' })
     const parsed = JSON.parse(result)
-    expect(parsed.ticket_id).toMatch(/^TKT-\d+$/)
+    expect(parsed.ticket_id).toMatch(/^TKT-[A-Z0-9-]+$/)
     expect(parsed.priority).toBe('high')
     expect(parsed.message).toBeDefined()
   })
 
-  it('increments ticket ID on each call', async () => {
+  it('generates a unique ticket ID on each call', async () => {
     const r1 = JSON.parse(await executeTool('escalate_to_support', { reason: 'Issue A', priority: 'low' }))
     const r2 = JSON.parse(await executeTool('escalate_to_support', { reason: 'Issue B', priority: 'low' }))
-    const id1 = parseInt(r1.ticket_id.replace('TKT-', ''))
-    const id2 = parseInt(r2.ticket_id.replace('TKT-', ''))
-    expect(id2).toBe(id1 + 1)
+    expect(r1.ticket_id).toMatch(/^TKT-[A-Z0-9]+$/)
+    expect(r2.ticket_id).toMatch(/^TKT-[A-Z0-9]+$/)
+    expect(r1.ticket_id).not.toBe(r2.ticket_id)
   })
 })
 
