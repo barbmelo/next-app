@@ -618,9 +618,31 @@ Browser (React)
 
 ---
 
-## What You Learned
+## 19. Design Patterns — The Blueprints Behind the Code
 
-| Concept | What It Is | The Analogy |
+Every feature built in this project is an instance of a named, reusable pattern. Recognizing them by name lets you spot the same solutions in other codebases and apply them deliberately in new ones.
+
+The full breakdown — with analogies, code examples, and file references — is in **[PATTERNS.md](./PATTERNS.md)**.
+
+The short version of how they all connect:
+
+```
+ProductChat.tsx (UI)
+  │  Callback: onText / onToolCall
+  ▼
+/api/chat  →  Repository (queries.ts)  →  Singleton (getDb)
+  ▼
+runAgent()  ←  Agentic Loop
+  ├─ executeTool()  ←  Dispatcher
+  │    └─ retrieveProducts()  ←  RAG + Three-Tier Cache  ←  Singleton (getOpenAI)
+  └─ judgeResponse()  ←  LLM-as-Judge  ←  Singleton (getAnthropic)
+```
+
+Agentic Loop + Callbacks is the skeleton. Every other pattern is plugged into it.
+
+---
+
+## What You Learned| Concept | What It Is | The Analogy |
 |---|---|---|
 | Claude API | Send a prompt, get a response | Hiring a consultant |
 | System prompt | Instructions that shape every answer | The briefing document |
@@ -647,6 +669,13 @@ Browser (React)
 | Prompt precision | Tell the model *how* to use tools, not just *when* | A recipe that says "add seasoning" vs exact amounts |
 | Cache inspection | Endpoint to check in-memory state without reading logs | Vending machine service panel |
 | API documentation | Interactive browser UI to explore and test endpoints | Swagger UI for Next.js (via Scalar) |
+| Agentic Loop (ReAct) | Model drives the loop, calls tools until it has enough to answer | Detective who keeps gathering clues |
+| Tool Use / Dispatcher | Definitions (what model sees) separated from implementations (what runs) | Menu vs. kitchen |
+| LLM-as-Judge | Second LLM call evaluates the first one's output | Newspaper editor reviewing the reporter |
+| Singleton pattern | Expensive client created once, reused across all requests | One coffee machine for the whole office |
+| Callback / Observer | Agent fires events; caller decides what to do with them | Athlete plays, broadcast crew handles the rest |
+| Repository pattern | All DB access behind named functions, nothing else queries directly | Library front desk |
+| Three-Tier Cache | Memory → DB → API; cheapest source checked first | Memory → notebook → library |
 
 ---
 
