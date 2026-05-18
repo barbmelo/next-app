@@ -1,6 +1,7 @@
 import { getPrompt } from '../../lib/prompts'
 import { judgeResponse } from '../../lib/judge'
 import { runAgent } from '../../lib/agent'
+import { checkGuardrail } from '../../lib/guardrail'
 import { getOrCreateSession, saveMessage, getMessages } from '../../lib/db/queries'
 import type { NextRequest } from 'next/server'
 
@@ -39,6 +40,27 @@ export async function POST(request: NextRequest) {
       let error: string | null = null
 
       try {
+        const guardrail = await checkGuardrail(message)
+
+        if (!guardrail.allowed) {
+          const declineText = "I'm here to help with electronics products, orders, and shipping. I can't help with that particular request — is there something store-related I can assist you with?"
+          await saveMessage(sessionId, 'assistant', declineText)
+          send({ type: 'text', text: declineText })
+          console.log(JSON.stringify({
+            session_id: sessionId,
+            tokens_used: { input: 0, output: 0 },
+            tool_calls: [],
+            latency_ms: Date.now() - startTime,
+            judgment_score: null,
+            guardrail_blocked: true,
+            guardrail_reason: guardrail.reason,
+            error: null,
+          }))
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          controller.close()
+          return
+        }
+
         const agentResult = await runAgent(messages, system, {
           onText: (text) => send({ type: 'text', text }),
           onToolCall: (name) => send({ type: 'tool_call', name }),
@@ -70,6 +92,7 @@ export async function POST(request: NextRequest) {
           tool_calls: agentResult.toolCallsLog,
           latency_ms: Date.now() - startTime,
           judgment_score: judgment.score,
+          guardrail_blocked: false,
           error: null,
         }))
       } catch (err) {
@@ -80,6 +103,7 @@ export async function POST(request: NextRequest) {
           tool_calls: [],
           latency_ms: Date.now() - startTime,
           judgment_score: null,
+          guardrail_blocked: false,
           error,
         }))
         send({ type: 'text', text: 'Something went wrong. Please try again.' })
