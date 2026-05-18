@@ -945,6 +945,165 @@ Ele compara o schema TypeScript com o que existe no Postgres e aplica as mudanç
 | Evaluation persistence | Save LLM-as-judge scores to DB so quality trends are queryable over time | Inspector keeping a logbook instead of a sticky note |
 | Drizzle ORM | TypeScript-first ORM — schema as code, fluent query API, `push` to sync with DB | Illustrated furniture manual vs. reading a parts list aloud |
 | `drizzle-kit push` | Syncs TypeScript schema to Postgres without writing migration SQL by hand | Auto-updating the blueprint when you add a room |
+| Redis (Upstash) | External key-value store shared across all serverless instances | Shared whiteboard vs. each worker's private notepad |
+| Rate limiting | Atomic counter per session in Redis to cap requests per time window | Turnstile that counts entries and locks after a limit |
+| Response cache | Store agent replies in Redis with TTL to skip redundant LLM calls | Pre-made sandwiches for repeat orders |
+| Serverless state | In-memory variables don't survive across instances — external store required | Each waiter has their own notepad, not a shared one |
+
+---
+
+## 22. Redis — Cache e Rate Limiting em Serverless
+
+**Analogia:** Imagina uma lanchonete movimentada. Toda vez que alguém pede um sanduíche, o cozinheiro vai do zero — corta o pão, monta tudo. O Redis é o balcão de sanduíches prontos: pedidos frequentes saem em segundos sem acionar a cozinha. E o caixa usa um contador no balcão para saber se um cliente já pediu vezes demais naquele horário.
+
+---
+
+### Por que não dá para usar variáveis em memória no serverless
+
+Em um servidor tradicional que fica ligado 24h, uma variável global funciona como cache ou contador. Em serverless (como a Vercel), cada requisição pode cair em uma instância diferente — e cada instância tem sua própria memória, sem compartilhamento:
+
+```
+Requisição 1 → Instância A → counter = 1
+Requisição 2 → Instância B → counter = 1  ← não viu a instância A
+Requisição 3 → Instância A → counter = 2
+```
+
+Para rate limiting ou cache compartilhado funcionar, o estado precisa estar **fora das instâncias** — num serviço externo como o Redis.
+
+---
+
+### Upstash Redis — tier gratuito permanente
+
+O **Upstash** é a opção mais natural para este projeto: integra diretamente com a Vercel, tem SDK REST (funciona em qualquer ambiente sem dependências nativas), e o tier gratuito é permanente:
+
+| Limite | Valor gratuito |
+|--------|---------------|
+| Comandos/dia | 10.000 |
+| Storage | 256MB |
+| Bancos | 1 |
+
+Para um projeto de aprendizado ou demo, é mais que suficiente.
+
+**Instalação:**
+```bash
+npm install @upstash/redis
+```
+
+**Configuração:**
+```ts
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+})
+```
+
+As variáveis de ambiente são geradas automaticamente ao instalar a integração Upstash no painel da Vercel.
+
+---
+
+### Uso 1: Rate Limiting por sessão
+
+**Problema sem Redis:** um usuário pode enviar centenas de mensagens em segundos, esgotando tokens e custos sem nenhuma barreira.
+
+**Com Redis — janela deslizante de 60 segundos:**
+
+```ts
+const key = `rate:${sessionId}`
+const count = await redis.incr(key)
+if (count === 1) await redis.expire(key, 60) // TTL de 60s na primeira requisição
+
+if (count > 20) {
+  return new Response('Rate limit exceeded', { status: 429 })
+}
+```
+
+O `INCR` do Redis é atômico — mesmo com várias instâncias rodando em paralelo, o contador nunca perde uma contagem. Isso não é possível com variáveis em memória em serverless.
+
+O rate limiting rodaria **antes do guardrail**, que roda antes do agente — o pedido é barrado o mais cedo possível.
+
+---
+
+### Uso 2: Cache de respostas frequentes
+
+**Problema sem cache:** perguntas repetidas ("Quais produtos vocês têm?", "O produto 9 está em estoque?") disparam o agente completo toda vez — embeddings, tool calls, LLM, judge.
+
+**Com Redis — cache com TTL:**
+
+```ts
+const cacheKey = `response:${hash(message)}`
+const cached = await redis.get<string>(cacheKey)
+if (cached) return cached  // retorna em ~5ms, sem custo de LLM
+
+const agentResult = await runAgent(...)
+await redis.set(cacheKey, agentResult.fullText, { ex: 300 }) // TTL de 5 minutos
+```
+
+Perguntas idênticas dentro de 5 minutos retornam instantaneamente. Perguntas sobre estoque têm TTL curto (dados mudam); perguntas sobre features de produto podem ter TTL longo (dados estáveis).
+
+---
+
+### Uso 3: Cache de resultados de ferramentas
+
+**Problema:** `check_order_status("ORD-1001")` pode ser chamado várias vezes na mesma conversa ou em conversas diferentes. O resultado não muda entre chamadas.
+
+**Com Redis:**
+
+```ts
+async function checkOrderStatus(input: Record<string, unknown>): Promise<string> {
+  const orderId = String(input.order_id ?? '').toUpperCase()
+  const cacheKey = `order:${orderId}`
+
+  const cached = await redis.get<string>(cacheKey)
+  if (cached) return cached
+
+  const result = JSON.stringify({ order_id: orderId, ...MOCK_ORDERS[orderId] })
+  await redis.set(cacheKey, result, { ex: 30 }) // TTL de 30 segundos
+  return result
+}
+```
+
+Em produção real, o TTL seria calibrado por tipo de dado: status de pedido (30s), disponibilidade de estoque (60s), estimativa de frete (300s).
+
+---
+
+### Onde o Redis se encaixaria no pipeline
+
+```
+Requisição chega
+  ↓
+Rate limiting (Redis INCR)        ← bloqueia se > 20 req/min
+  ↓
+checkGuardrail()
+  ↓
+Cache de resposta (Redis GET)     ← retorna se pergunta já foi respondida
+  ↓
+runAgent()
+  ├─ executeTool()
+  │    └─ Cache de tool (Redis GET/SET)
+  └─ judgeResponse()
+  ↓
+Redis SET (salva resposta no cache)
+  ↓
+saveEvaluation() → Postgres
+```
+
+---
+
+### Redis vs Postgres — quando usar cada um
+
+| Necessidade | Use |
+|-------------|-----|
+| Contador atômico, rate limit | Redis |
+| Cache com TTL automático | Redis |
+| Estado efêmero (sessão ativa, lock) | Redis |
+| Histórico permanente de mensagens | Postgres |
+| Scores de avaliação consultáveis | Postgres |
+| Embeddings de produtos | Postgres |
+| Qualquer dado que não pode ser perdido | Postgres |
+
+A regra geral: **Redis para velocidade e temporalidade, Postgres para durabilidade e consultas complexas.**
 
 ---
 
@@ -954,6 +1113,8 @@ The core system is production-ready: agentic loop, persistence, observability, g
 
 - **Analytics dashboard**: query the `evaluations` table to visualize score trends, pass rate by day, and prompt version comparisons
 - **A/B testing prompts**: route traffic between prompt versions and compare average scores directly from the `evaluations` table
+- **Redis rate limiting**: add Upstash Redis before the guardrail to cap requests per session and prevent token abuse
+- **Redis response cache**: cache frequent agent replies in Redis with TTL to skip redundant LLM calls
 - **Output guardrail**: add a second filter after `runAgent()` to catch PII, off-brand responses, or hallucinations before they reach the browser
 - **Vector database** (Pinecone, Supabase pgvector): move embeddings out of memory into a persistent store that scales to thousands of products
 - **Real e-commerce backend**: replace mock order/stock data with a real database or API (Shopify, WooCommerce, etc.)
