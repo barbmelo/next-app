@@ -103,6 +103,18 @@ const MOCK_STOCK: Record<string, StockInfo> = {
   '12': { in_stock: true,  quantity: 88 },
   '13': { in_stock: true,  quantity: 7  },
   '14': { in_stock: true,  quantity: 23 },
+  '15': { in_stock: true,  quantity: 18 },
+  '16': { in_stock: true,  quantity: 34 },
+  '17': { in_stock: true,  quantity: 52 },
+  '18': { in_stock: false, quantity: 0  },
+  '19': { in_stock: true,  quantity: 120 },
+  '20': { in_stock: true,  quantity: 63 },
+  '21': { in_stock: true,  quantity: 29 },
+  '22': { in_stock: true,  quantity: 77 },
+  '23': { in_stock: true,  quantity: 11 },
+  '24': { in_stock: true,  quantity: 45 },
+  '25': { in_stock: false, quantity: 0  },
+  '26': { in_stock: true,  quantity: 8  },
 }
 
 // --- Tool implementations ---

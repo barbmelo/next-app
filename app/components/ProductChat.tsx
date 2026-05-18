@@ -20,10 +20,10 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 const SUGGESTIONS = [
-  'I need something for long flights',
+  'I need headphones for long flights',
   'Where is my order ORD-1001?',
   'What is in stock under $60?',
-  'Get me shipping rates for product 9 to 10001',
+  'I want to start making YouTube videos',
 ]
 
 export default function ProductChat() {

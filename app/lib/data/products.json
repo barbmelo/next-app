@@ -3,36 +3,108 @@
     "id": "9",
     "name": "WD 2TB Elements Portable External Hard Drive - USB 3.0",
     "price": 64,
-    "description": "USB 3.0 and USB 2.0 Compatibility Fast data transfers Improve PC Performance High Capacity; Compatibility Formatted NTFS for Windows 10, Windows 8.1, Windows 7; Reformatting may be required for other operating systems; Compatibility may vary depending on user's hardware configuration and operating system"
+    "description": "USB 3.0 portable hard drive for Windows PCs. Fast data transfers, high capacity, plug-and-play setup. Formatted NTFS, compatible with Windows 10, 8.1, and 7."
   },
   {
     "id": "10",
     "name": "SanDisk SSD PLUS 1TB Internal SSD - SATA III 6 Gb/s",
     "price": 109,
-    "description": "Easy upgrade for faster boot up, shutdown, application load and response. Boosts burst write performance, making it ideal for typical PC workloads. The perfect balance of performance and reliability. Read/write speeds of up to 535MB/s/450MB/s."
+    "description": "Internal solid state drive for desktop and laptop upgrades. Read/write speeds up to 535MB/s and 450MB/s. Ideal for faster boot times, application load, and everyday PC performance."
   },
   {
     "id": "11",
-    "name": "Silicon Power 256GB SSD 3D NAND A55 SLC Cache Performance Boost SATA III 2.5",
-    "price": 109,
-    "description": "3D NAND flash are applied to deliver high transfer speeds. The advanced SLC Cache Technology allows performance boost and longer lifespan. 7mm slim design suitable for Ultrabooks and Ultra-slim notebooks. Supports TRIM command, Garbage Collection technology, RAID, and ECC."
+    "name": "Silicon Power 256GB SSD 3D NAND A55 SLC Cache SATA III 2.5-inch",
+    "price": 49,
+    "description": "Budget-friendly 2.5-inch SSD with 3D NAND flash for reliable performance. 7mm slim design fits Ultrabooks and thin laptops. Supports TRIM, Garbage Collection, and ECC for longevity."
   },
   {
     "id": "12",
-    "name": "WD 4TB Gaming Drive Works with Playstation 4 Portable External Hard Drive",
+    "name": "WD 4TB Gaming Drive for PlayStation 4 Portable External Hard Drive",
     "price": 114,
-    "description": "Expand your PS4 gaming experience. Play anywhere. Fast and easy setup. Sleek design with high capacity. 3-year manufacturer's limited warranty."
+    "description": "Expand PS4 storage with 4TB of portable capacity. Plug-and-play setup, no external power required. Compact design with a 3-year limited warranty."
   },
   {
     "id": "13",
     "name": "Acer SB220Q 21.5-inch Full HD IPS Monitor",
-    "price": 599,
-    "description": "21.5-inch Full HD (1920x1080) IPS monitor with Radeon FreeSync technology. Zero-frame ultra-thin design, 4ms response time, 75Hz refresh rate, 250 nit brightness, 178-degree viewing angles. Ideal as a desktop monitor or second screen."
+    "price": 149,
+    "description": "21.5-inch Full HD (1920x1080) IPS monitor with AMD Radeon FreeSync. Zero-frame ultra-thin design, 4ms response time, 75Hz refresh rate, 178-degree viewing angles. Great as a desktop monitor or second screen."
   },
   {
     "id": "14",
-    "name": "Samsung 49-Inch CHG90 144Hz Curved Gaming Monitor - Super Ultrawide QLED",
+    "name": "Samsung 49-inch CHG90 144Hz Curved Gaming Monitor - Super Ultrawide QLED",
     "price": 999.99,
-    "description": "49-inch Super Ultrawide 32:9 curved gaming monitor. Quantum Dot (QLED) technology with HDR support. 144Hz refresh rate and 1ms response time eliminate motion blur. Ideal for gaming and multi-screen productivity setups."
+    "description": "49-inch Super Ultrawide 32:9 curved gaming monitor with Quantum Dot (QLED) display and HDR support. 144Hz refresh rate and 1ms response time. Ideal for immersive gaming and multi-window productivity."
+  },
+  {
+    "id": "15",
+    "name": "Sony WH-1000XM5 Wireless Noise-Canceling Headphones",
+    "price": 349.99,
+    "description": "Industry-leading noise cancellation with 8 microphones and Auto NC Optimizer. 30-hour battery life, multipoint Bluetooth connection, Speak-to-Chat feature. Foldable design with premium carrying case. Perfect for travel, commuting, and focus work."
+  },
+  {
+    "id": "16",
+    "name": "Apple AirPods Pro 2nd Generation with MagSafe Case",
+    "price": 249,
+    "description": "Active Noise Cancellation and Transparency mode. Adaptive Audio adjusts between modes automatically. Up to 6 hours listening time, 30 hours total with case. IPX4 water resistance. Works seamlessly with iPhone, iPad, and Mac."
+  },
+  {
+    "id": "17",
+    "name": "Logitech MX Master 3S Wireless Performance Mouse",
+    "price": 99.99,
+    "description": "8K DPI optical sensor works on any surface including glass. MagSpeed electromagnetic scroll wheel for fast and precise scrolling. Connects via Bluetooth or USB receiver to up to 3 devices. Ergonomic right-handed design for all-day comfort."
+  },
+  {
+    "id": "18",
+    "name": "Keychron K2 Wireless Mechanical Keyboard - Compact 75% Layout",
+    "price": 89.99,
+    "description": "Compact 75% layout mechanical keyboard with Bluetooth 5.1 and USB-C wired mode. Compatible with Mac and Windows. Available with Gateron Red, Brown, or Blue switches. White LED backlight, aluminum frame, hot-swappable version available."
+  },
+  {
+    "id": "19",
+    "name": "Anker 65W USB-C Compact Charging Brick - GaN II Technology",
+    "price": 35.99,
+    "description": "65W GaN II fast charger in a compact form factor. Charges a MacBook Pro, iPad, or Android phone at full speed. Single USB-C port with PowerIQ 3.0. Compatible with all USB-C devices. Foldable prongs for travel."
+  },
+  {
+    "id": "20",
+    "name": "Anker 26800mAh Portable Charger - Dual USB-A Output",
+    "price": 59.99,
+    "description": "High-capacity 26800mAh power bank charges an iPhone up to 6.5 times or a Samsung Galaxy up to 4 times. Dual USB-A ports for simultaneous charging. MultiProtect safety system prevents overcharging. LED indicator shows remaining power."
+  },
+  {
+    "id": "21",
+    "name": "Logitech C920 HD Pro Webcam - 1080p 30fps",
+    "price": 69.99,
+    "description": "Full HD 1080p video at 30fps with stereo audio from two built-in microphones. Automatic light correction and HD autofocus. Compatible with Zoom, Teams, and Google Meet. Universal clip fits laptops, monitors, and tripods."
+  },
+  {
+    "id": "22",
+    "name": "Amazon Echo Dot 5th Generation Smart Speaker with Alexa",
+    "price": 49.99,
+    "description": "Compact smart speaker with improved audio and a built-in temperature sensor. Control smart home devices, set alarms, play music, and get answers with Alexa. Ecolink connection for lower energy use. Available in Charcoal, Glacier White, and Deep Sea Blue."
+  },
+  {
+    "id": "23",
+    "name": "Apple iPad 10th Generation 64GB Wi-Fi - 10.9-inch",
+    "price": 449,
+    "description": "10.9-inch Liquid Retina display with True Tone. A14 Bionic chip for fast performance and gaming. 12MP front and rear cameras. USB-C connector, Wi-Fi 6 support, all-day battery life. Compatible with Apple Pencil and Magic Keyboard Folio."
+  },
+  {
+    "id": "24",
+    "name": "Kindle Paperwhite 16GB E-reader - 6.8-inch Glare-Free Display",
+    "price": 139.99,
+    "description": "300 ppi glare-free Paperwhite display, readable in bright sunlight. Adjustable warm light and auto-adjusting brightness. IPX8 waterproof, up to 10 weeks battery life. Stores thousands of books. Available with or without ads on the lock screen."
+  },
+  {
+    "id": "25",
+    "name": "Nintendo Switch OLED Model - White",
+    "price": 349.99,
+    "description": "7-inch OLED screen with vivid colors and crisp contrast. Enhanced audio from built-in speakers. 64GB internal storage, wide adjustable stand, and wired LAN port in dock. Play at home on TV or on the go in handheld mode."
+  },
+  {
+    "id": "26",
+    "name": "Canon EOS M50 Mark II Mirrorless Camera - 24.1MP with 15-45mm Lens Kit",
+    "price": 599.99,
+    "description": "24.1MP APS-C CMOS sensor with DIGIC 8 processor. 4K video recording, Dual Pixel CMOS autofocus with eye detection. Flip-out touchscreen, built-in Wi-Fi and Bluetooth. Lightweight body at 387g. Great for content creators, vloggers, and photography beginners."
   }
 ]
