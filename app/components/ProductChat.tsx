@@ -194,9 +194,9 @@ export default function ProductChat() {
 
               {msg.role === 'assistant' && msg.judgment && (
                 <div className="flex flex-wrap gap-1.5 px-1">
-                  {msg.toolCallsLog?.map((tool, j) => (
+                  {[...new Set(msg.toolCallsLog)]?.map((tool) => (
                     <span
-                      key={j}
+                      key={tool}
                       className="text-xs bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded-full"
                     >
                       {TOOL_LABELS[tool] ?? tool}
