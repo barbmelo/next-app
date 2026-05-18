@@ -2,7 +2,7 @@ import { getPrompt } from '../../lib/prompts'
 import { judgeResponse } from '../../lib/judge'
 import { runAgent } from '../../lib/agent'
 import { checkGuardrail } from '../../lib/guardrail'
-import { getOrCreateSession, saveMessage, getMessages } from '../../lib/db/queries'
+import { getOrCreateSession, saveMessage, getMessages, saveEvaluation } from '../../lib/db/queries'
 import type { NextRequest } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -74,6 +74,15 @@ export async function POST(request: NextRequest) {
           agentResult.fullText,
           agentResult.toolCallsLog
         )
+
+        await saveEvaluation({
+          sessionId,
+          score: judgment.score,
+          passed: judgment.passed,
+          reason: judgment.reason,
+          promptVersion,
+          toolCalls: agentResult.toolCallsLog,
+        })
 
         send({
           type: 'metadata',

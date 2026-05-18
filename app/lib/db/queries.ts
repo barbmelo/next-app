@@ -2,7 +2,7 @@ import 'server-only'
 import { eq } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 import { getDb } from './index'
-import { sessions, messages, productEmbeddings } from './schema'
+import { sessions, messages, productEmbeddings, evaluations } from './schema'
 
 export async function createSession(): Promise<string> {
   const id = randomUUID()
@@ -59,4 +59,22 @@ export async function saveEmbeddings(
     .insert(productEmbeddings)
     .values(entries.map((e) => ({ productId: e.productId, embedding: JSON.stringify(e.embedding) })))
     .onConflictDoNothing()
+}
+
+export async function saveEvaluation(params: {
+  sessionId: string
+  score: number
+  passed: boolean
+  reason: string
+  promptVersion: number
+  toolCalls: string[]
+}): Promise<void> {
+  await getDb().insert(evaluations).values({
+    sessionId: params.sessionId,
+    score: params.score,
+    passed: params.passed,
+    reason: params.reason,
+    promptVersion: params.promptVersion,
+    toolCalls: JSON.stringify(params.toolCalls),
+  })
 }
