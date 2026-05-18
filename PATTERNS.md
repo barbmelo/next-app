@@ -104,6 +104,36 @@ Prompt changes are code changes — they live in version control, they're review
 
 ---
 
+### Guardrail / Input Filter
+**File: `app/lib/guardrail.ts`**
+
+**Analogy:** A bouncer at a nightclub. They don't check every drink or conversation inside — they make a fast yes/no decision at the door. The main event never starts for someone who shouldn't be there.
+
+A lightweight classifier runs *before* the expensive agent loop. If the message is off-topic, a prompt injection attempt, or harmful, it's rejected immediately — the agent loop never starts, no tools are called, and cost is near zero.
+
+```ts
+const guardrail = await checkGuardrail(message)
+
+if (!guardrail.allowed) {
+  // stream polite decline, log guardrail_blocked: true, return early
+}
+
+// only reaches here if allowed
+const agentResult = await runAgent(...)
+```
+
+**Why Haiku?** Binary yes/no classification doesn't need deep reasoning. Haiku is fast (~200ms) and cheap enough to run on every single request without concern.
+
+**Fail-open:** If the guardrail API throws or returns malformed JSON, the request is *allowed through* rather than blocked. For a customer-facing assistant, blocking a legitimate user due to a guardrail bug is worse than an occasional off-topic answer.
+
+```ts
+} catch {
+  return { allowed: true, reason: 'Guardrail unavailable — defaulting to allow.' }
+}
+```
+
+---
+
 ## Classic Software Patterns
 
 ### Singleton
@@ -197,6 +227,12 @@ ProductChat.tsx (UI)
   │  Repository: getOrCreateSession, getMessages, saveMessage
   │  Singleton: getDb()
   ▼
+checkGuardrail()  ← Input Guardrail (Haiku)
+  │
+  ├─ blocked → stream decline, log, return early (agent never runs)
+  │
+  └─ allowed ↓
+  ▼
 runAgent()  ← Agentic Loop
   │
   │  Callback → SSE stream (Observer)
@@ -210,4 +246,4 @@ runAgent()  ← Agentic Loop
        Singleton: getAnthropic()
 ```
 
-**The key insight:** Agentic Loop + Callbacks is the skeleton. Every other pattern is an organ plugged into it. RAG gives the agent knowledge. Repository gives it memory. LLM-as-judge gives it a quality signal. Singleton keeps it efficient. Dispatcher keeps it extensible.
+**The key insight:** Guardrail is the gate. Agentic Loop + Callbacks is the skeleton behind it. Every other pattern is an organ plugged into that skeleton. RAG gives the agent knowledge. Repository gives it memory. LLM-as-judge gives it a quality signal. Singleton keeps it efficient. Dispatcher keeps it extensible.

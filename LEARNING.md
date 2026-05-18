@@ -632,6 +632,8 @@ ProductChat.tsx (UI)
   ▼
 /api/chat  →  Repository (queries.ts)  →  Singleton (getDb)
   ▼
+checkGuardrail()  ←  Input Guardrail (Haiku)  →  blocked? return early
+  ▼
 runAgent()  ←  Agentic Loop
   ├─ executeTool()  ←  Dispatcher
   │    └─ retrieveProducts()  ←  RAG + Three-Tier Cache  ←  Singleton (getOpenAI)
@@ -642,7 +644,124 @@ Agentic Loop + Callbacks is the skeleton. Every other pattern is plugged into it
 
 ---
 
-## What You Learned| Concept | What It Is | The Analogy |
+## 20. Guardrails — The Bouncer at the Door
+
+**Analogy:** A nightclub has a bouncer at the entrance. They don't check every drink or conversation inside — they just make sure the right people get in and the wrong ones don't. The bouncer is fast, makes a simple yes/no decision, and the main event never starts for someone who shouldn't be there.
+
+That's the guardrail pattern: a lightweight filter that runs *before* the expensive operation, not after.
+
+---
+
+### Why guardrails matter
+
+Without a guardrail, every message — no matter how off-topic or malicious — enters the full agent loop:
+
+```
+user: "Write me a poem about the ocean."
+→ getMessages() called
+→ runAgent() called (full Sonnet model)
+→ tools potentially called
+→ judgeResponse() called
+→ cost: ~$0.05, latency: ~3s
+```
+
+With a guardrail:
+
+```
+user: "Write me a poem about the ocean."
+→ checkGuardrail() → blocked in ~200ms, ~$0.0002
+→ agent loop never starts
+```
+
+---
+
+### The implementation
+
+**File: `app/lib/guardrail.ts`**
+
+A single Haiku call with a tight classification prompt. Returns `{ allowed: boolean, reason: string }`.
+
+```ts
+const result = await checkGuardrail(message)
+
+if (!result.allowed) {
+  // stream polite decline, log, return early
+  // agent loop never starts
+}
+```
+
+**Why Haiku?** It's the smallest, fastest, cheapest Claude model — ideal for binary yes/no classification where speed and cost matter more than reasoning depth. A guardrail that takes 2 seconds defeats its own purpose.
+
+---
+
+### Fail-open vs fail-closed
+
+This is an important design decision every guardrail must make.
+
+**Fail-closed:** if the guardrail errors, block the message.
+- Pro: nothing slips through during an outage
+- Con: a guardrail bug blocks all legitimate users
+
+**Fail-open:** if the guardrail errors, allow the message.
+- Pro: users are never blocked by a guardrail failure
+- Con: a guardrail outage means no filtering
+
+For a customer-facing store assistant, **fail-open is the right choice**. A blocked customer is worse than an occasional off-topic answer. We fail open in two places:
+
+```ts
+// If the API throws
+} catch {
+  return { allowed: true, reason: 'Guardrail unavailable — defaulting to allow.' }
+}
+
+// If the JSON is malformed
+} catch {
+  return { allowed: true, reason: 'Guardrail parse error — defaulting to allow.' }
+}
+```
+
+---
+
+### What gets blocked
+
+- **Off-topic requests** — "Write me a poem", "Explain quantum physics"
+- **Prompt injection** — "Ignore all previous instructions and..."
+- **Harmful content** — anything that would violate content policies
+
+### What always passes through
+
+- Product questions, order lookups, shipping, availability
+- Ambiguous questions that *could* be store-related
+
+---
+
+### Observability
+
+Blocked requests are logged with two new fields:
+
+```json
+{
+  "guardrail_blocked": true,
+  "guardrail_reason": "Request is unrelated to the electronics store.",
+  "tokens_used": { "input": 0, "output": 0 }
+}
+```
+
+`tokens_used: 0` on a blocked request is itself a signal — it means the agent loop was skipped entirely, saving cost.
+
+---
+
+### Input vs output guardrails
+
+What we built is an **input guardrail** — it filters what goes *in*. An **output guardrail** would filter what comes *out* (checking Claude's response for PII, off-brand content, or hallucinations before it reaches the browser).
+
+This project currently only has the input layer. Output guardrails follow the same pattern but run after `runAgent()` and before `send({ type: 'text', ... })`.
+
+---
+
+## What You Learned
+
+| Concept | What It Is | The Analogy |
 |---|---|---|
 | Claude API | Send a prompt, get a response | Hiring a consultant |
 | System prompt | Instructions that shape every answer | The briefing document |
@@ -676,6 +795,9 @@ Agentic Loop + Callbacks is the skeleton. Every other pattern is plugged into it
 | Callback / Observer | Agent fires events; caller decides what to do with them | Athlete plays, broadcast crew handles the rest |
 | Repository pattern | All DB access behind named functions, nothing else queries directly | Library front desk |
 | Three-Tier Cache | Memory → DB → API; cheapest source checked first | Memory → notebook → library |
+| Input guardrail | Fast Haiku call that blocks off-topic/harmful messages before the agent runs | Bouncer at the door |
+| Fail-open design | On guardrail failure, allow the request rather than blocking legitimate users | Default to open gate when the lock breaks |
+| Prompt injection | Attack where user tries to override the system prompt via the message field | Fake ID at the door |
 
 ---
 
