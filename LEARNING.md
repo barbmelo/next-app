@@ -759,6 +759,150 @@ This project currently only has the input layer. Output guardrails follow the sa
 
 ---
 
+## 21. Persistindo Scores de Avaliação — O Histórico de Qualidade
+
+**Analogia:** Imagine um restaurante onde o inspetor de qualidade avalia cada prato e anota a nota num bloco de papel. Se ele jogar fora o bloco depois de cada turno, nunca vai saber se a cozinha está melhorando ou piorando ao longo do tempo. Guardar as notas no banco é o que transforma uma avaliação pontual num sistema de monitoramento real.
+
+---
+
+### O problema anterior
+
+O LLM-as-judge já existia e gerava um score para cada resposta — mas o score só ia para o log da função no Vercel:
+
+```ts
+console.log(JSON.stringify({ judgment_score: 4, ... }))
+```
+
+Logs da Vercel somem depois de um tempo e não são consultáveis. Não dava para responder: *"o score médio caiu depois que mudamos o prompt?"* ou *"quais sessões tiveram respostas ruins?"*
+
+---
+
+### A solução: tabela `evaluations`
+
+**Arquivo: `app/lib/db/schema.ts`**
+
+```ts
+export const evaluations = pgTable('evaluations', {
+  id: serial('id').primaryKey(),
+  sessionId: text('session_id').notNull().references(() => sessions.id),
+  score: integer('score').notNull(),        // 1–5
+  passed: boolean('passed').notNull(),      // score >= 4
+  reason: text('reason').notNull(),         // explicação do juiz
+  promptVersion: integer('prompt_version').notNull(),
+  toolCalls: text('tool_calls').notNull(),  // JSON array
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+```
+
+Agora cada avaliação é salva permanentemente e pode ser consultada via SQL.
+
+---
+
+### Fluxo atualizado
+
+```
+runAgent()          → resposta do agente
+judgeResponse()     → { score: 4, passed: true, reason: "..." }
+saveEvaluation()    → INSERT na tabela evaluations   ← novo
+send(metadata)      → score aparece no badge do chat
+console.log(...)    → log estruturado (continua existindo)
+```
+
+---
+
+### O que dá pra consultar agora
+
+```sql
+-- Score médio por versão de prompt
+SELECT prompt_version, ROUND(AVG(score), 2) as avg_score, COUNT(*) as total
+FROM evaluations
+GROUP BY prompt_version
+ORDER BY prompt_version;
+
+-- Sessões com respostas ruins (score <= 2)
+SELECT session_id, score, reason, created_at
+FROM evaluations
+WHERE score <= 2
+ORDER BY created_at DESC;
+
+-- Quais combinações de ferramentas têm melhor score
+SELECT tool_calls, ROUND(AVG(score), 2) as avg_score, COUNT(*) as total
+FROM evaluations
+GROUP BY tool_calls
+ORDER BY avg_score DESC;
+
+-- Taxa de aprovação ao longo do tempo
+SELECT DATE(created_at) as day,
+       ROUND(100.0 * SUM(passed::int) / COUNT(*), 1) as pass_rate
+FROM evaluations
+GROUP BY day
+ORDER BY day;
+```
+
+---
+
+### Como o Drizzle ORM funciona
+
+**Analogia:** Escrever SQL na mão é como montar um móvel lendo a lista de peças em voz alta. O Drizzle é o manual ilustrado — você descreve o que quer em TypeScript, e ele gera o SQL correto por baixo.
+
+O Drizzle tem três partes neste projeto:
+
+**1. Schema (`app/lib/db/schema.ts`) — definição das tabelas**
+
+Você define as tabelas como objetos TypeScript. Cada coluna tem tipo, constraints e relações:
+
+```ts
+export const evaluations = pgTable('evaluations', {
+  id: serial('id').primaryKey(),           // auto-incremento
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => sessions.id),        // foreign key
+  score: integer('score').notNull(),
+  passed: boolean('passed').notNull(),
+})
+```
+
+O TypeScript infere os tipos automaticamente — se você tentar inserir uma string no campo `score`, o compilador avisa antes de rodar.
+
+**2. Queries (`app/lib/db/queries.ts`) — consultas encadeadas**
+
+Em vez de SQL raw, você usa uma API fluente:
+
+```ts
+// SELECT com filtro e ordenação
+await getDb()
+  .select({ role: messages.role, content: messages.content })
+  .from(messages)
+  .where(eq(messages.sessionId, sessionId))
+  .orderBy(messages.createdAt)
+
+// INSERT
+await getDb().insert(evaluations).values({
+  sessionId, score, passed, reason, promptVersion,
+  toolCalls: JSON.stringify(toolCalls),
+})
+
+// INSERT sem falhar se já existir
+await getDb()
+  .insert(productEmbeddings)
+  .values(...)
+  .onConflictDoNothing()
+```
+
+**3. `drizzle-kit push` — sincronização com o banco**
+
+Quando você adiciona ou modifica uma tabela no schema TypeScript, roda:
+
+```bash
+npx drizzle-kit push
+```
+
+Ele compara o schema TypeScript com o que existe no Postgres e aplica as mudanças (`CREATE TABLE`, `ALTER TABLE`, etc.) automaticamente — sem precisar escrever SQL de migração na mão.
+
+**Por que o Repository pattern importa aqui:** todo o código Drizzle fica em `queries.ts`. O resto da aplicação só chama funções nomeadas (`saveEvaluation`, `getMessages`). Se você trocar Drizzle por outro ORM amanhã, só muda um arquivo.
+
+---
+
 ## What You Learned
 
 | Concept | What It Is | The Analogy |
@@ -798,16 +942,19 @@ This project currently only has the input layer. Output guardrails follow the sa
 | Input guardrail | Fast Haiku call that blocks off-topic/harmful messages before the agent runs | Bouncer at the door |
 | Fail-open design | On guardrail failure, allow the request rather than blocking legitimate users | Default to open gate when the lock breaks |
 | Prompt injection | Attack where user tries to override the system prompt via the message field | Fake ID at the door |
+| Evaluation persistence | Save LLM-as-judge scores to DB so quality trends are queryable over time | Inspector keeping a logbook instead of a sticky note |
+| Drizzle ORM | TypeScript-first ORM — schema as code, fluent query API, `push` to sync with DB | Illustrated furniture manual vs. reading a parts list aloud |
+| `drizzle-kit push` | Syncs TypeScript schema to Postgres without writing migration SQL by hand | Auto-updating the blueprint when you add a room |
 
 ---
 
 ## What's Next
 
-The core system is production-ready: agentic loop, persistence, observability, tests, CI/CD, and live data. Some directions to explore from here:
+The core system is production-ready: agentic loop, persistence, observability, guardrails, evaluation history, tests, CI/CD, and live data. Some directions to explore from here:
 
-- **A/B testing prompts**: route traffic between prompt versions and compare average judgment scores with real data
-- **Analytics dashboard**: query the structured logs to visualize quality trends, token spend, and tool usage over time
+- **Analytics dashboard**: query the `evaluations` table to visualize score trends, pass rate by day, and prompt version comparisons
+- **A/B testing prompts**: route traffic between prompt versions and compare average scores directly from the `evaluations` table
+- **Output guardrail**: add a second filter after `runAgent()` to catch PII, off-brand responses, or hallucinations before they reach the browser
 - **Vector database** (Pinecone, Supabase pgvector): move embeddings out of memory into a persistent store that scales to thousands of products
 - **Real e-commerce backend**: replace mock order/stock data with a real database or API (Shopify, WooCommerce, etc.)
 - **Test coverage reporting**: add `@vitest/coverage-v8` to measure which lines are covered and track it over time
-- **Expand the OpenAPI spec**: as new endpoints are added, keep `openapi.ts` updated — it doubles as live documentation and a contract for future integrations
