@@ -250,7 +250,7 @@ export default function ProductChat() {
                 send(input)
               }
             }}
-            placeholder="Ask about products, orders, or shipping…"
+            placeholder="Ask me anything…"
             disabled={loading}
             rows={1}
             className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:bg-white disabled:opacity-50 leading-relaxed transition-colors"
