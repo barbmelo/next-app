@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  basePath: '/aiassistant',
+  env: {
+    NEXT_PUBLIC_BASE_PATH: '/aiassistant',
+  },
 };
 
 export default nextConfig;

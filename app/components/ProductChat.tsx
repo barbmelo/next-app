@@ -58,7 +58,7 @@ export default function ProductChat() {
     setLoading(true)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    const res = await fetch('/api/chat', {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: text, session_id: sessionId }),
